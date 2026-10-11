@@ -16,3 +16,9 @@ Chosen via `npm create solana-dapp@latest` → template `gh:solana-foundation/te
 ## 2026-10-11 — npm cache permissions
 - Issue: `~/.npm` cache folder had root-owned files from a prior `sudo npm` use, blocking all `npm install`.
 - Fix: `sudo chown -R 501:20 "$HOME/.npm"` (run by Jake).
+
+## 2026-10-11 — Data sources: Pyth dropped, Binance + GeckoTerminal instead
+- SPEC originally planned Pyth Benchmarks (TradingView history shim) for majors (SOL/BTC/ETH). Verified it now requires a paid API key (`Authorization: Bearer $PYTH_API_KEY`) since the 26 Aug 2026 Pyth Core upgrade — violates the project's no-API-keys rule. Dropped.
+- **Majors + all Time Machine campaigns → Binance public REST API** (`api.binance.com/api/v3/klines`). No key, no auth. Verified live: queried SOLUSDT daily candles around Nov 2022 and got the real FTX-collapse crash ($29.62 → $14.08 in two days), confirming both availability and the correct crash date/magnitude for that Time Machine campaign.
+- **Meme/long-tail Solana tokens (Daily pool only) → GeckoTerminal public API** (`api.geckoterminal.com/api/v2/networks/solana/pools/{pool}/ohlcv/{timeframe}`). No key. Verified live against a real Orca SOL/USDC pool (`Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE`). Confirmed hard limit: 401 error querying beyond 180 days back on the free tier — so GeckoTerminal is Daily-pool-only, never Time Machine. Rate limit ~10 req/min — pipeline fetch script must throttle, not parallelize.
+- SPEC.md section 4.1 updated to match.

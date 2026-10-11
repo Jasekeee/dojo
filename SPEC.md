@@ -110,8 +110,10 @@ Insight text = **templates driven by these numbers** (no LLM). Write ≥ 30 temp
 Runs on Jake's Mac with Node. Output files are committed to the repo and bundled in the app. The app never calls these APIs.
 
 ### 4.1 Sources (no API keys)
-- Majors: **Pyth Benchmarks** TradingView-style history endpoint [VERIFY exact URL, symbols, resolutions, rate limits, history depth].
-- Meme/long-tail tokens: **GeckoTerminal public API** (pools list + OHLCV) [VERIFY endpoints, rate limits (very low?), terms of use].
+- **[FACT, verified 2026-10-11]** Majors (SOL/BTC/ETH) + all Time Machine historical campaigns: **Binance public REST API**, `GET https://api.binance.com/api/v3/klines?symbol=SOLUSDT&interval=1d&startTime=...&endTime=...`. No key required, deep history (confirmed real Nov 2022 FTX-collapse SOL candles: $29.62 → $14.08 in two days), generous weight-based rate limit (`x-mbx-used-weight-1m` header, ~1200/min budget on public endpoints).
+  - Original plan (Pyth Benchmarks TradingView shim) is **dead**: as of 26 Aug 2026 (Pyth Core upgrade) it requires an `Authorization: Bearer $PYTH_API_KEY` header — violates the no-API-keys rule. Dropped.
+- Meme/long-tail Solana tokens (for Daily pool episodes, not date-specific): **GeckoTerminal public API**, `GET https://api.geckoterminal.com/api/v2/networks/solana/pools/{pool_address}/ohlcv/{timeframe}`. No key required. **Confirmed limit: public tier only returns the last 180 days of history** (`before_timestamp` beyond that → 401). Fine for Daily pool (not tied to a specific old date); not usable for Time Machine.
+  - Rate limit: ~10 req/min on the keyless tier — pipeline must throttle (pace requests, don't parallelize).
 - If a source is unusable: STOP and report; fallback options to propose: fewer tokens, majors only, cache more slowly.
 
 ### 4.2 Steps
