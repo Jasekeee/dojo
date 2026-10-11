@@ -1,40 +1,50 @@
 import { Tabs } from 'expo-router'
 import React from 'react'
 import { UiIconSymbol } from '@/components/ui/ui-icon-symbol'
+import { colors } from '@/src/ui/theme'
+
+const HIDDEN = { tabBarItemStyle: { display: 'none' as const } }
 
 export default function TabLayout() {
   return (
-    <Tabs screenOptions={{ headerShown: false }}>
-      {/* The index redirects to the account screen */}
-      <Tabs.Screen name="index" options={{ tabBarItemStyle: { display: 'none' } }} />
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: colors.brand,
+        tabBarInactiveTintColor: colors.muted,
+        tabBarStyle: { backgroundColor: colors.bg1, borderTopColor: colors.line },
+      }}
+    >
+      {/* index just redirects to /train */}
+      <Tabs.Screen name="index" options={HIDDEN} />
+
       <Tabs.Screen
-        name="account"
+        name="train"
         options={{
-          title: 'Account',
-          tabBarIcon: ({ color }) => <UiIconSymbol size={28} name="wallet.pass.fill" color={color} />,
+          title: 'Train',
+          tabBarIcon: ({ color }) => <UiIconSymbol size={28} name="bolt.fill" color={color} />,
         }}
       />
       <Tabs.Screen
-        name="settings"
+        name="time-machine"
         options={{
-          title: 'Settings',
-          tabBarIcon: ({ color }) => <UiIconSymbol size={28} name="gearshape.fill" color={color} />,
+          title: 'Time Machine',
+          tabBarIcon: ({ color }) => <UiIconSymbol size={28} name="clock.fill" color={color} />,
         }}
       />
       <Tabs.Screen
-        name="demo"
+        name="profile"
         options={{
-          title: 'Demo',
-          tabBarIcon: ({ color }) => <UiIconSymbol size={28} name="ladybug.fill" color={color} />,
+          title: 'Profile',
+          tabBarIcon: ({ color }) => <UiIconSymbol size={28} name="person.fill" color={color} />,
         }}
       />
-      <Tabs.Screen
-        name="episodes"
-        options={{
-          title: 'Episodes',
-          tabBarIcon: ({ color }) => <UiIconSymbol size={28} name="chart.bar.fill" color={color} />,
-        }}
-      />
+
+      {/* Dev/QA screens from the scaffold + Phase 1 spike — hidden from the tab bar, still routable. */}
+      <Tabs.Screen name="account" options={HIDDEN} />
+      <Tabs.Screen name="settings" options={HIDDEN} />
+      <Tabs.Screen name="demo" options={HIDDEN} />
+      <Tabs.Screen name="episodes" options={HIDDEN} />
     </Tabs>
   )
 }

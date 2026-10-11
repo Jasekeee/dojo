@@ -13,6 +13,9 @@ const MAPPING = {
   'wallet.pass.fill': 'wallet',
   'ladybug.fill': 'bug-report',
   'chart.bar.fill': 'bar-chart',
+  'bolt.fill': 'bolt',
+  'clock.fill': 'history',
+  'person.fill': 'person',
 } as const satisfies Record<string, ComponentProps<typeof MaterialIcons>['name']>
 
 export type UiIconSymbolName = keyof typeof MAPPING
