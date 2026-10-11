@@ -10,7 +10,7 @@ const RAW_DIR = join(__dirname, '..', 'data', 'raw')
 
 const BEFORE_LEN = 80
 const AFTER_LEN = 40
-const STRIDE = 50 // candles between consecutive decision points from the same series
+const STRIDE = 25 // candles between consecutive decision points from the same series
 
 function sliceSeries(series: RawSeries): SlicedWindow[] {
   const windows: SlicedWindow[] = []

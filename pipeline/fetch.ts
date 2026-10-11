@@ -12,24 +12,38 @@ import type { Candle, RawSeries } from './types'
 const RAW_DIR = join(__dirname, '..', 'data', 'raw')
 mkdirSync(RAW_DIR, { recursive: true })
 
-const MAJORS: { symbol: string; name: string; binanceSymbol: string }[] = [
+const MAJOR_ASSETS: { symbol: string; name: string; binanceSymbol: string }[] = [
   { symbol: 'SOL', name: 'Solana', binanceSymbol: 'SOLUSDT' },
   { symbol: 'BTC', name: 'Bitcoin', binanceSymbol: 'BTCUSDT' },
+  { symbol: 'ETH', name: 'Ethereum', binanceSymbol: 'ETHUSDT' },
+]
+const MAJOR_TIMEFRAMES: { interval: string; label: '1h' | '4h' }[] = [
+  { interval: '1h', label: '1h' },
+  { interval: '4h', label: '4h' },
 ]
 
-const MEME_TOKEN_COUNT = 20
+const MEME_TOKEN_COUNT = 50
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 async function fetchJson<T>(url: string): Promise<T> {
-  const res = await fetch(url)
-  if (!res.ok) {
-    const body = await res.text().catch(() => '')
-    throw new Error(`Fetch failed ${res.status} ${url}: ${body.slice(0, 300)}`)
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const res = await fetch(url)
+    if (res.status === 429) {
+      const wait = 15000 * (attempt + 1)
+      console.log(`    429, backing off ${wait}ms`)
+      await sleep(wait)
+      continue
+    }
+    if (!res.ok) {
+      const body = await res.text().catch(() => '')
+      throw new Error(`Fetch failed ${res.status} ${url}: ${body.slice(0, 300)}`)
+    }
+    return res.json() as Promise<T>
   }
-  return res.json() as Promise<T>
+  throw new Error(`Fetch failed: rate limited after retries ${url}`)
 }
 
 // --- Binance (majors) ---
@@ -66,14 +80,20 @@ interface GtPool {
 
 const MIN_POOL_AGE_DAYS = 25 // need enough history for ~500 hourly candles
 
+const POOL_PAGES = [1, 2, 3, 4, 5, 6, 7, 8]
+const TRENDING_PAGES = [1, 2, 3]
+
 async function fetchTopSolanaPools(): Promise<GtPool[]> {
-  const pages = await Promise.all([
-    fetchJson<{ data: GtPool[] }>('https://api.geckoterminal.com/api/v2/networks/solana/pools?page=1'),
-    fetchJson<{ data: GtPool[] }>('https://api.geckoterminal.com/api/v2/networks/solana/pools?page=2'),
-    fetchJson<{ data: GtPool[] }>('https://api.geckoterminal.com/api/v2/networks/solana/pools?page=3'),
-    fetchJson<{ data: GtPool[] }>('https://api.geckoterminal.com/api/v2/networks/solana/trending_pools?page=1'),
-    fetchJson<{ data: GtPool[] }>('https://api.geckoterminal.com/api/v2/networks/solana/trending_pools?page=2'),
-  ])
+  const pages: { data: GtPool[] }[] = []
+  // Sequential, not parallel: stay well under the keyless rate limit while discovering candidates.
+  for (const p of POOL_PAGES) {
+    pages.push(await fetchJson<{ data: GtPool[] }>(`https://api.geckoterminal.com/api/v2/networks/solana/pools?page=${p}`))
+    await sleep(7000)
+  }
+  for (const p of TRENDING_PAGES) {
+    pages.push(await fetchJson<{ data: GtPool[] }>(`https://api.geckoterminal.com/api/v2/networks/solana/trending_pools?page=${p}`))
+    await sleep(7000)
+  }
   const seen = new Map<string, GtPool>()
   for (const p of pages.flatMap((pg) => pg.data)) {
     if (!seen.has(p.attributes.address)) seen.set(p.attributes.address, p)
@@ -114,18 +134,20 @@ async function main() {
   const skipMajors = process.argv.includes('--skip-majors')
   if (!skipMajors) {
     console.log('Fetching majors from Binance...')
-    for (const m of MAJORS) {
-      const candles = await fetchBinanceKlines(m.binanceSymbol, '1h', 1000)
-      const series: RawSeries = {
-        source: 'binance',
-        assetSymbol: m.symbol,
-        assetName: m.name,
-        timeframe: '1h',
-        candles,
-        fetchedAt: new Date().toISOString(),
+    for (const m of MAJOR_ASSETS) {
+      for (const tf of MAJOR_TIMEFRAMES) {
+        const candles = await fetchBinanceKlines(m.binanceSymbol, tf.interval, 1000)
+        const series: RawSeries = {
+          source: 'binance',
+          assetSymbol: m.symbol,
+          assetName: m.name,
+          timeframe: tf.label,
+          candles,
+          fetchedAt: new Date().toISOString(),
+        }
+        writeFileSync(join(RAW_DIR, `major_${m.symbol}_${tf.label}.json`), JSON.stringify(series))
+        console.log(`  ${m.symbol} ${tf.label}: ${candles.length} candles`)
       }
-      writeFileSync(join(RAW_DIR, `major_${m.symbol}.json`), JSON.stringify(series))
-      console.log(`  ${m.symbol}: ${candles.length} candles`)
     }
   } else {
     console.log('Skipping majors (--skip-majors).')
