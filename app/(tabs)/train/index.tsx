@@ -74,7 +74,7 @@ export default function TrainScreen() {
             10 charts · ~3 min
           </Text>
           <View style={{ marginTop: space.md }}>
-            <PrimaryButton label="Start Daily" onPress={() => router.push('/episodes')} />
+            <PrimaryButton label="Start Daily" onPress={() => router.push('/round')} />
           </View>
         </LinearGradient>
 
