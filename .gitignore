@@ -33,6 +33,9 @@ yarn-error.*
 # local env files
 .env*.local
 
+# pipeline raw data cache
+data/raw/
+
 # typescript
 *.tsbuildinfo
 

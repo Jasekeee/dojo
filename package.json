@@ -1,5 +1,5 @@
 {
-  "name": "dojo_scaffold_tmp",
+  "name": "dojo",
   "scripts": {
     "android": "expo run:android",
     "android:build": "expo prebuild -p android",

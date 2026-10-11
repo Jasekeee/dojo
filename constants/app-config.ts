@@ -3,7 +3,7 @@ import { Cluster } from '@/components/cluster/cluster'
 import { ClusterNetwork } from '@/components/cluster/cluster-network'
 
 export class AppConfig {
-  static name = 'dojo_scaffold_tmp'
+  static name = 'dojo'
   static uri = 'https://example.com'
   static clusters: Cluster[] = [
     {

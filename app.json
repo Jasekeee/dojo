@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "dojo_scaffold_tmp",
-    "slug": "dojo_scaffold_tmp",
+    "name": "dojo",
+    "slug": "dojo",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "templateexpobasic",
+    "scheme": "dojo",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true
@@ -15,7 +15,7 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.anonymous.dojo_scaffold_tmp"
+      "package": "com.anonymous.dojo"
     },
     "web": {
       "bundler": "metro",
