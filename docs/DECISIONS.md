@@ -29,3 +29,8 @@ Chosen via `npm create solana-dapp@latest` → template `gh:solana-foundation/te
 ## 2026-10-11 — Removed wallet-gated navigation
 - The scaffold's `app/_layout.tsx` wrapped `(tabs)` in `<Stack.Protected guard={isAuthenticated}>`, forcing MWA wallet sign-in before any screen was reachable. This violates SPEC.md P0 ("Fresh install -> first episode playable in < 30s, no wallet required") and section 12 acceptance criteria.
 - Fix: removed the guard; `(tabs)` is always reachable, `sign-in` stays as an ordinary route for later Certify/Account flows, not a startup gate.
+
+## 2026-10-11 — Skia confirmed working; vitest for engine tests
+- SPEC.md section 9 marked `@shopify/react-native-skia` [VERIFY works in the scaffold's dev build]. Installed `@shopify/react-native-skia` (2.14.0) + ran a native rebuild (`expo run:android`): CMake compiled its native libs for arm64-v8a without issue, app installed and the chart rendered correctly on the Seeker. Confirmed working — used for `src/chart/CandleChart.tsx`.
+- Test runner: `vitest`, not `jest-expo`. `src/engine/` is zero-UI-dependency pure TS by design (architecture rule in SPEC section 9), so it doesn't need React Native's test environment/mocks — vitest runs it directly and fast (~100ms for 22 tests). `npm test` runs it.
+- Caveat hit during setup: running two `npm install` commands concurrently against the same project corrupted `node_modules` (one install's writes got lost). Don't parallelize npm installs in the same working tree — run them sequentially.
