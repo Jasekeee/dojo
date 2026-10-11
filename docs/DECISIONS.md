@@ -22,3 +22,10 @@ Chosen via `npm create solana-dapp@latest` → template `gh:solana-foundation/te
 - **Majors + all Time Machine campaigns → Binance public REST API** (`api.binance.com/api/v3/klines`). No key, no auth. Verified live: queried SOLUSDT daily candles around Nov 2022 and got the real FTX-collapse crash ($29.62 → $14.08 in two days), confirming both availability and the correct crash date/magnitude for that Time Machine campaign.
 - **Meme/long-tail Solana tokens (Daily pool only) → GeckoTerminal public API** (`api.geckoterminal.com/api/v2/networks/solana/pools/{pool}/ohlcv/{timeframe}`). No key. Verified live against a real Orca SOL/USDC pool (`Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE`). Confirmed hard limit: 401 error querying beyond 180 days back on the free tier — so GeckoTerminal is Daily-pool-only, never Time Machine. Rate limit ~10 req/min — pipeline fetch script must throttle, not parallelize.
 - SPEC.md section 4.1 updated to match.
+
+## 2026-10-11 — Fonts: Inter + Space Grotesk via Expo Google Fonts
+- SPEC.md section 7 marked this [VERIFY]. Confirmed `@expo-google-fonts/inter` and `@expo-google-fonts/space-grotesk` exist on npm (0.4.x, actively published) and install cleanly against Expo SDK 55 (no peer dep conflicts). Wired into `app/_layout.tsx` via `useFonts`; rendered correctly on the Seeker (Phase 2 Train screen).
+
+## 2026-10-11 — Removed wallet-gated navigation
+- The scaffold's `app/_layout.tsx` wrapped `(tabs)` in `<Stack.Protected guard={isAuthenticated}>`, forcing MWA wallet sign-in before any screen was reachable. This violates SPEC.md P0 ("Fresh install -> first episode playable in < 30s, no wallet required") and section 12 acceptance criteria.
+- Fix: removed the guard; `(tabs)` is always reachable, `sign-in` stays as an ordinary route for later Certify/Account flows, not a startup gate.
