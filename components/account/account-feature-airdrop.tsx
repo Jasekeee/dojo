@@ -10,7 +10,7 @@ import { useRequestAirdrop } from '@/components/account/use-request-airdrop'
 export function AccountFeatureAirdrop({ back }: { back: () => void }) {
   const { account } = useMobileWallet()
   const amount = 1
-  const requestAirdrop = useRequestAirdrop({ address: account?.address as PublicKey })
+  const requestAirdrop = useRequestAirdrop({ address: new PublicKey(account!.address) })
 
   return (
     <AppView>

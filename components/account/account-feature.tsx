@@ -16,8 +16,9 @@ import { WalletUiButtonConnect } from '@/components/solana/wallet-ui-button-conn
 export function AccountFeature() {
   const { account } = useMobileWallet()
   const [refreshing, setRefreshing] = useState(false)
-  const invalidateBalance = useGetBalanceInvalidate({ address: account?.address as PublicKey })
-  const invalidateTokenAccounts = useGetTokenAccountsInvalidate({ address: account?.address as PublicKey })
+  const address = account ? new PublicKey(account.address) : undefined
+  const invalidateBalance = useGetBalanceInvalidate({ address: address as PublicKey })
+  const invalidateTokenAccounts = useGetTokenAccountsInvalidate({ address: address as PublicKey })
   const onRefresh = useCallback(async () => {
     setRefreshing(true)
     await Promise.all([invalidateBalance(), invalidateTokenAccounts()])
@@ -32,14 +33,14 @@ export function AccountFeature() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => onRefresh()} />}
         >
           <AppView style={{ alignItems: 'center', gap: 4 }}>
-            <AccountUiBalance address={account.address} />
+            <AccountUiBalance address={address as PublicKey} />
             <AppText style={{ opacity: 0.7 }}>{ellipsify(account.address.toString(), 8)}</AppText>
           </AppView>
           <AppView style={{ marginTop: 16, alignItems: 'center' }}>
             <AccountUiButtons />
           </AppView>
           <AppView style={{ marginTop: 16, alignItems: 'center' }}>
-            <AccountUiTokenAccounts address={account.address} />
+            <AccountUiTokenAccounts address={address as PublicKey} />
           </AppView>
         </ScrollView>
       ) : (
