@@ -50,6 +50,9 @@ export function PrimaryButton({
         haptics.confirm()
         onPress?.(e)
       }}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: isDisabled, busy: loading }}
       style={[styles.base, styles[`size_${size}`], styles[`variant_${variant}`], animatedStyle]}
     >
       {loading ? (

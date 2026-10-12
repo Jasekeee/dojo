@@ -89,6 +89,8 @@ export function DecisionSheet({ onDecide }: { onDecide: (decision: Decision) => 
           onPressIn={() => { skipPressed.value = 1 }}
           onPressOut={() => { skipPressed.value = 0 }}
           onPress={skip}
+          accessibilityRole="button"
+          accessibilityLabel="Skip this chart"
           style={[styles.skipButton, skipStyle]}
         >
           <Text variant="title" style={styles.skipLabel}>Skip</Text>

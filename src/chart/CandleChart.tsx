@@ -68,7 +68,12 @@ export function CandleChart({
   }, [min, range])
 
   return (
-    <View style={{ width, height }}>
+    <View
+      style={{ width, height }}
+      accessible
+      accessibilityRole="image"
+      accessibilityLabel={`Candlestick chart with ${candles.length} candles`}
+    >
       {/* Skia canvas — candles and lines */}
       <Canvas style={StyleSheet.absoluteFill}>
         {/* Grid lines */}
