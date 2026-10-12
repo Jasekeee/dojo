@@ -14,14 +14,23 @@ export function isHapticsMuted(): boolean {
 }
 
 export const haptics = {
+  /** Chip tap, tab change, selection change */
   select: () => !muted && Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light),
+  /** Primary button press, action confirmation */
   confirm: () => !muted && Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium),
+  /** Profitable trade, certification success */
   win: () => !muted && Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success),
+  /** Unprofitable trade — soft double-tap */
   loss: async () => {
     if (muted) return
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
     await new Promise((resolve) => setTimeout(resolve, 90))
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
   },
+  /** Streak milestone, level-up */
   streakMilestone: () => !muted && Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy),
+  /** Network/system error — distinct from trade loss */
+  error: () => !muted && Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error),
+  /** Non-critical warning (e.g. no stop set) */
+  warning: () => !muted && Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning),
 }

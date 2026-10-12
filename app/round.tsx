@@ -8,7 +8,7 @@ import {
   StyleSheet,
   View,
 } from 'react-native'
-import Animated, { FadeIn, FadeInDown, FadeInUp, SlideInDown } from 'react-native-reanimated'
+import Animated, { FadeIn, FadeInDown, FadeInUp, SlideInDown, ZoomIn } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CandleChart } from '@/src/chart/CandleChart'
 import { episodes } from '@/src/content/episodes'
@@ -429,7 +429,10 @@ export default function RoundScreen() {
                     {formatReturn(userReturn)}
                   </Text>
                 </View>
-                <View style={styles.srBadge}>
+                <Animated.View
+                  entering={ZoomIn.springify().damping(10).stiffness(260).mass(0.7).delay(200)}
+                  style={styles.srBadge}
+                >
                   <Text style={[
                     styles.srDeltaText,
                     { color: displaySrDelta >= 0 ? colors.gain : colors.loss },
@@ -437,7 +440,7 @@ export default function RoundScreen() {
                     {displaySrDelta >= 0 ? '+' : ''}{displaySrDelta}
                   </Text>
                   <Text variant="caption" style={{ textAlign: 'center' }}>SR</Text>
-                </View>
+                </Animated.View>
               </View>
 
               {/* SR line */}

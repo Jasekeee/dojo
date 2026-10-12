@@ -198,21 +198,24 @@ export default function CertifyScreen() {
 
       if (lc.includes('cancel') || lc.includes('reject') || lc.includes('declined')) {
         setErrorMsg('Cancelled by wallet. Nothing was submitted.')
+        haptics.select()
       } else if (lc.includes('not confirmed') || lc.includes('timed out') || lc.includes('timeout')) {
         setErrorMsg(
           submittedSig
             ? 'Confirmation timed out. Your transaction was submitted — check Explorer to see if it confirmed.'
             : 'Request timed out. Please try again.',
         )
+        haptics.error()
       } else if (lc.includes('blockhash') || lc.includes('block hash')) {
         setErrorMsg('Blockhash expired. Please try again.')
+        haptics.error()
       } else if (lc.includes('insufficient') || lc.includes('lamport')) {
         setErrorMsg('Insufficient devnet SOL. Get a free airdrop at faucet.solana.com.')
+        haptics.warning()
       } else {
         setErrorMsg(msg || 'Unknown error. Please try again.')
+        haptics.error()
       }
-
-      haptics.loss()
     }
   }
 
