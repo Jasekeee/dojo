@@ -301,7 +301,7 @@ export default function RoundScreen() {
                   <View style={styles.divider} />
                   <View style={{ gap: space.sm }}>
                     {insights.map((ins, i) => (
-                      <View key={i} style={styles.insightRow}>
+                      <View key={`insight-${i}`} style={styles.insightRow}>
                         <View style={styles.insightDot} />
                         <Text variant="body" style={styles.insightText}>{ins}</Text>
                       </View>

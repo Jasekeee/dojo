@@ -22,9 +22,16 @@ export function generateInsights(metrics: BehaviourMetrics, lastResult: RoundRes
 
   // FOMO insight
   if (metrics.fomoPct > 50) {
+    const fomoTags = new Set(['pump_dump', 'fakeout', 'breakout'])
+    const fomoBuys = metrics.lastResults.filter(
+      (r) => r.action === 'buy' && r.tags.some((t) => fomoTags.has(t))
+    )
+    const fomoAvgReturn = fomoBuys.length > 0
+      ? Math.round((fomoBuys.reduce((s, r) => s + r.userReturn, 0) / fomoBuys.length) * 100)
+      : 0
     out.push(fill(pick(templates.high_fomo), {
       fomoPct: Math.round(metrics.fomoPct),
-      fomoAvgReturn: '-12', // static placeholder; real average needs more history
+      fomoAvgReturn: fomoAvgReturn >= 0 ? `+${fomoAvgReturn}` : String(fomoAvgReturn),
     }))
   } else if (metrics.fomoPct < 20 && metrics.lastResults.length >= 5) {
     out.push(pick(templates.low_fomo))

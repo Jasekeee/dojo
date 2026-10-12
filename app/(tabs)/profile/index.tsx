@@ -122,7 +122,7 @@ export default function ProfileScreen() {
           <Animated.View entering={FadeInDown.duration(350).delay(160).springify()} style={{ gap: space.md }}>
             <Text variant="label" style={{ letterSpacing: 1 }}>RECENT HISTORY</Text>
             {state.history.slice(-8).reverse().map((r, i) => (
-              <Card key={i} style={styles.historyRow}>
+              <Card key={`${r.episodeId}-${i}`} style={styles.historyRow}>
                 <View style={styles.historyLeft}>
                   <View style={[
                     styles.actionBadge,

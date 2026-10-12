@@ -115,7 +115,7 @@ export default function DailySummaryScreen() {
             const score = r.score ?? 0
             const isWin = score > 0
             return (
-              <Card key={i} style={styles.roundRow}>
+              <Card key={`${r.episodeId}-${i}`} style={styles.roundRow}>
                 <View style={styles.roundLeft}>
                   <View style={[
                     styles.roundNumBadge,

@@ -8,6 +8,7 @@ import Animated, {
   useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
+  type SharedValue,
 } from 'react-native-reanimated'
 import { PrimaryButton } from '@/src/ui/components/PrimaryButton'
 import { Screen } from '@/src/ui/components/Screen'
@@ -53,6 +54,24 @@ const SLIDES = [
   },
 ]
 
+function AnimatedDot({
+  index,
+  scrollX,
+  accent,
+}: {
+  index: number
+  scrollX: SharedValue<number>
+  accent: string
+}) {
+  const dotStyle = useAnimatedStyle(() => {
+    const inputRange = [(index - 1) * width, index * width, (index + 1) * width]
+    const w = interpolate(scrollX.value, inputRange, [6, 20, 6], 'clamp')
+    const opacity = interpolate(scrollX.value, inputRange, [0.3, 1, 0.3], 'clamp')
+    return { width: w, opacity }
+  })
+  return <Animated.View style={[styles.dot, { backgroundColor: accent }, dotStyle]} />
+}
+
 export default function OnboardingScreen() {
   const router = useRouter()
   const [slide, setSlide] = useState(0)
@@ -92,20 +111,9 @@ export default function OnboardingScreen() {
         </Pressable>
         {/* Dots */}
         <View style={styles.dots}>
-          {SLIDES.map((_, i) => {
-            const dotStyle = useAnimatedStyle(() => {
-              const inputRange = [(i - 1) * width, i * width, (i + 1) * width]
-              const width_ = interpolate(scrollX.value, inputRange, [6, 20, 6], 'clamp')
-              const opacity = interpolate(scrollX.value, inputRange, [0.3, 1, 0.3], 'clamp')
-              return { width: width_, opacity }
-            })
-            return (
-              <Animated.View
-                key={i}
-                style={[styles.dot, { backgroundColor: current.accent }, dotStyle]}
-              />
-            )
-          })}
+          {SLIDES.map((s, i) => (
+            <AnimatedDot key={i} index={i} scrollX={scrollX} accent={s.accent} />
+          ))}
         </View>
         <View style={{ width: 40 }} />
       </View>
