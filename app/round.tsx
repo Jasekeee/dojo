@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
@@ -8,7 +9,7 @@ import {
   StyleSheet,
   View,
 } from 'react-native'
-import Animated, { FadeIn, FadeInDown, FadeInUp, SlideInDown, ZoomIn } from 'react-native-reanimated'
+import Animated, { FadeIn, FadeInDown, FadeInUp, SlideInDown } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CandleChart } from '@/src/chart/CandleChart'
 import { episodes } from '@/src/content/episodes'
@@ -19,21 +20,23 @@ import { applySrDelta, getLevel } from '@/src/engine/rating'
 import { computeScore } from '@/src/engine/score'
 import { simulateTrade, type SimResult } from '@/src/engine/sim'
 import { loadState, recordRoundResult, type RoundResult } from '@/src/state/store'
-import { Card } from '@/src/ui/components/Card'
 import { type Decision, DecisionSheet } from '@/src/ui/components/DecisionSheet'
 import { PrimaryButton } from '@/src/ui/components/PrimaryButton'
 import { Text } from '@/src/ui/components/Text'
 import { haptics } from '@/src/ui/haptics'
 import { isReduceMotionEnabled } from '@/src/ui/motion'
-import { colors, levelColors, radius, space } from '@/src/ui/theme'
+import { colors, fonts, levelColors, radius, space, SCREEN_PAD } from '@/src/ui/theme'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 type Phase = 'deciding' | 'revealing' | 'result'
 
 const SCREEN_WIDTH    = Dimensions.get('window').width
-const CHART_HEIGHT    = 268
-const REVEAL_INTERVAL = isReduceMotionEnabled() ? 15 : 45 // ms per candle tick
+const SCREEN_HEIGHT   = Dimensions.get('window').height
+// Chart takes ≥60% of screen — the hero visual
+const CHART_HEIGHT    = Math.round(SCREEN_HEIGHT * 0.60)
+const REVEAL_INTERVAL = isReduceMotionEnabled() ? 15 : 40
+const PENDING_IDS_KEY = '@dojo/pendingSessionIds'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -63,9 +66,7 @@ export default function RoundScreen() {
     returnTo?:     string
   }>()
 
-  // Episode is stable for the lifetime of this screen
-  const [episode] = useState<Episode>(() => resolveEpisode(params.episodeId))
-
+  const [episode]     = useState<Episode>(() => resolveEpisode(params.episodeId))
   const [phase,       setPhase]       = useState<Phase>('deciding')
   const [decision,    setDecision]    = useState<Decision | null>(null)
   const [simResult,   setSimResult]   = useState<SimResult | null>(null)
@@ -73,27 +74,26 @@ export default function RoundScreen() {
   const [savedResult, setSavedResult] = useState<RoundResult | null>(null)
   const [insights,    setInsights]    = useState<string[]>([])
   const [srBefore,    setSrBefore]    = useState<number | null>(null)
+  const [saveError,   setSaveError]   = useState(false)
+  const [pendingIds,  setPendingIds]  = useState<string[] | null>(null)
 
-  // ── Mutation guards — prevent duplicate submissions ──
   const decidingFired = useRef(false)
   const savingFired   = useRef(false)
+  const revealTimer   = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // ── Interval ref ──
-  const revealTimer = useRef<ReturnType<typeof setInterval> | null>(null)
-
-  // ── Session params ──
   const sessionIndex = params.sessionIndex ? parseInt(params.sessionIndex, 10) : undefined
   const sessionTotal = params.sessionTotal ? parseInt(params.sessionTotal, 10) : undefined
   const isInSession  = sessionIndex !== undefined && sessionTotal !== undefined
 
-  // ── Derived values ──
-  // episode.before guaranteed non-empty by data contract, but guard defensively
-  const lastBefore = episode.before.length > 0
-    ? episode.before[episode.before.length - 1]
+  const lastBefore  = episode.before.length > 0 ? episode.before[episode.before.length - 1] : undefined
+  const entry       = lastBefore?.[4] ?? 0
+  const isShort     = decision?.action === 'short'
+  const stopPrice   = decision?.stopPct !== undefined
+    ? isShort ? entry * (1 + decision.stopPct) : entry * (1 - decision.stopPct)
     : undefined
-  const entry      = lastBefore?.[4] ?? 0
-  const stopPrice  = decision?.stopPct   !== undefined ? entry * (1 - decision.stopPct)   : undefined
-  const targetPrice= decision?.targetPct !== undefined ? entry * (1 + decision.targetPct) : undefined
+  const targetPrice = decision?.targetPct !== undefined
+    ? isShort ? entry * (1 - decision.targetPct) : entry * (1 + decision.targetPct)
+    : undefined
   const allCandles = [...episode.before, ...episode.after]
   const revealDone = revealCount >= allCandles.length
   const revealPct  = episode.after.length > 0
@@ -101,29 +101,29 @@ export default function RoundScreen() {
     : 1
   const context    = (episode as any).context as Episode['context'] | undefined
 
-  // ── Load SR before round ──
   useEffect(() => {
     loadState().then((s) => setSrBefore(s.sr))
-  }, [])
-
-  // ── Cleanup timer on unmount ──
-  useEffect(() => {
-    return () => {
-      if (revealTimer.current) clearInterval(revealTimer.current)
+    const globalIds = (global as any).__pendingDailyIds as string[] | undefined
+    if (globalIds) {
+      setPendingIds(globalIds)
+    } else {
+      AsyncStorage.getItem(PENDING_IDS_KEY).then((raw) => {
+        if (raw) { try { setPendingIds(JSON.parse(raw)) } catch {} }
+      })
     }
   }, [])
 
-  // ── skipReveal: fast-forward animation to completion ──
+  useEffect(() => {
+    return () => { if (revealTimer.current) clearInterval(revealTimer.current) }
+  }, [])
+
   const decisionRef  = useRef(decision)
   const simResultRef = useRef(simResult)
   decisionRef.current  = decision
   simResultRef.current = simResult
 
   const skipReveal = useCallback(() => {
-    if (revealTimer.current) {
-      clearInterval(revealTimer.current)
-      revealTimer.current = null
-    }
+    if (revealTimer.current) { clearInterval(revealTimer.current); revealTimer.current = null }
     const total = episode.before.length + episode.after.length
     setRevealCount(total)
     const d = decisionRef.current
@@ -133,7 +133,6 @@ export default function RoundScreen() {
     else if (finalReturn < -0.05) haptics.loss()
   }, [episode])
 
-  // ── AppState listener: foreground during reveal → fast-forward ──
   useEffect(() => {
     if (phase !== 'revealing' || revealDone) return
     const sub = RNAppState.addEventListener('change', (next) => {
@@ -142,15 +141,14 @@ export default function RoundScreen() {
     return () => sub.remove()
   }, [phase, revealDone, skipReveal])
 
-  // ─── onDecide: user taps Buy or Skip ───────────────────────────────────────
-
   const onDecide = useCallback((d: Decision) => {
     if (decidingFired.current) return
     decidingFired.current = true
 
-    const sim = d.action === 'buy'
+    const sim = d.action !== 'skip'
       ? simulateTrade({
           entry,
+          direction: d.action,
           size:      d.size,
           stopPct:   d.stopPct,
           targetPct: d.targetPct,
@@ -177,42 +175,45 @@ export default function RoundScreen() {
     }, REVEAL_INTERVAL)
   }, [entry, episode])
 
-  // ─── onSeeResult: save result and show result card ─────────────────────────
-
   const onSeeResult = useCallback(async () => {
     if (savingFired.current || !decision) return
     savingFired.current = true
+    setSaveError(false)
 
-    const userReturn = decision.action === 'skip' ? 0 : (simResult?.returnOnEquity ?? 0)
-    const score      = computeScore(userReturn, episode.baselines.bot_return)
-    const state      = await loadState()
+    try {
+      const userReturn = decision.action === 'skip' ? 0 : (simResult?.returnOnEquity ?? 0)
+      const score      = computeScore(userReturn, episode.baselines.bot_return)
+      const state      = await loadState()
 
-    const roundResult: RoundResult = {
-      episodeId:  episode.id,
-      tags:       episode.tags,
-      action:     decision.action,
-      userReturn,
-      botReturn:  episode.baselines.bot_return,
-      score,
-      srDelta:    Math.round(applySrDelta(state.sr, score, episode.difficulty) - state.sr),
-      difficulty: episode.difficulty,
+      const roundResult: RoundResult = {
+        episodeId:  episode.id,
+        tags:       episode.tags,
+        action:     decision.action,
+        userReturn,
+        botReturn:  episode.baselines.bot_return,
+        score,
+        srDelta:    Math.round(applySrDelta(state.sr, score, episode.difficulty) - state.sr),
+        difficulty: episode.difficulty,
+      }
+
+      const newState = await recordRoundResult(roundResult)
+      setSavedResult(roundResult)
+
+      const metrics = computeBehaviourMetrics(
+        newState.history.map((h) => ({
+          episodeId: h.episodeId, tags: h.tags, action: h.action, score: h.score,
+          userReturn: 0, botReturn: 0, srDelta: 0, difficulty: 2 as const,
+        })),
+      )
+      try { setInsights(generateInsights(metrics, roundResult)) } catch {}
+      setPhase('result')
+      haptics.confirm()
+    } catch {
+      savingFired.current = false
+      setSaveError(true)
+      haptics.error()
     }
-
-    const newState = await recordRoundResult(roundResult)
-    setSavedResult(roundResult)
-
-    // Insights use the updated history
-    const metrics = computeBehaviourMetrics(
-      newState.history.map((h) => ({
-        episodeId: h.episodeId, tags: h.tags, action: h.action, score: h.score,
-        userReturn: 0, botReturn: 0, srDelta: 0, difficulty: 2 as const,
-      })),
-    )
-    setInsights(generateInsights(metrics, roundResult))
-    setPhase('result')
   }, [decision, simResult, episode])
-
-  // ─── onNext: navigation after result ───────────────────────────────────────
 
   const onNext = useCallback(() => {
     if (!isInSession || savedResult === null) {
@@ -225,7 +226,6 @@ export default function RoundScreen() {
     if (next >= sessionTotal!) {
       router.replace('/daily-summary' as any)
     } else {
-      const pendingIds = (global as any).__pendingDailyIds as string[] | undefined
       const nextId = pendingIds?.[next]
       router.replace({
         pathname: '/round',
@@ -236,65 +236,64 @@ export default function RoundScreen() {
         },
       })
     }
-  }, [isInSession, savedResult, sessionIndex, sessionTotal, params.returnTo, router])
+  }, [isInSession, savedResult, sessionIndex, sessionTotal, pendingIds, params.returnTo, router])
 
-  // ─── Derived display values (result phase) ─────────────────────────────────
-
-  const userReturn = decision?.action === 'skip' ? 0 : (simResult?.returnOnEquity ?? 0)
-  // Use savedResult.srDelta (actual saved delta) not a recomputed value
+  const userReturn    = decision?.action === 'skip' ? 0 : (simResult?.returnOnEquity ?? 0)
   const displaySrDelta  = savedResult?.srDelta ?? 0
   const displaySrBefore = srBefore ?? 500
   const displaySrAfter  = displaySrBefore + displaySrDelta
   const displayLevel    = getLevel(displaySrAfter)
 
+  const diffLabel = DIFFICULTY_LABEL[episode.difficulty]
+
   // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg0 }}>
+    <View style={[styles.root, { backgroundColor: colors.bg0 }]}>
 
-      {/* Top bar */}
-      <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
-        <View style={styles.topLeft}>
+      {/* ── Top bar ── */}
+      <View style={[styles.topBar, { paddingTop: insets.top + 6 }]}>
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={16}
+          accessibilityRole="button"
+          accessibilityLabel="Close"
+          style={styles.closeBtn}
+        >
+          <Text style={styles.closeBtnText}>×</Text>
+        </Pressable>
+
+        <View style={styles.topCenter}>
           {isInSession && (
-            <View style={styles.sessionPill}>
-              <Text variant="caption" style={{ color: colors.brand, fontWeight: '700' }}>
-                {sessionIndex! + 1} / {sessionTotal}
-              </Text>
+            <View style={styles.progressDots}>
+              {Array.from({ length: sessionTotal! }).map((_, i) => (
+                <View
+                  key={i}
+                  style={[
+                    styles.progressDot,
+                    i <= sessionIndex! ? styles.progressDotDone : styles.progressDotPending,
+                  ]}
+                />
+              ))}
             </View>
           )}
-          <Text variant="caption" style={{ letterSpacing: 1, fontWeight: '600' }}>
+          <Text style={styles.topPair}>
             {episode.asset.symbol} · {episode.timeframe.toUpperCase()}
           </Text>
-          {episode.kind === 'time_machine' && context && (
-            <View style={styles.tmBadge}>
-              <Text variant="caption" style={{ color: colors.warn, fontSize: 10, fontWeight: '700' }}>
-                {context.date}
-              </Text>
-            </View>
-          )}
         </View>
-        <View style={styles.topRight}>
-          {phase === 'deciding' && (
-            <Text variant="caption">
-              {DIFFICULTY_LABEL[episode.difficulty]}
-            </Text>
-          )}
-        </View>
+
+        <Text style={styles.topDifficulty}>{diffLabel}</Text>
       </View>
 
-      {/* Time Machine context banner */}
+      {/* ── Time machine context ── */}
       {phase === 'deciding' && context && (
         <Animated.View entering={FadeInDown.duration(300)} style={styles.contextBanner}>
-          <Text variant="caption" style={{ color: colors.warn, fontWeight: '700', letterSpacing: 0.5 }}>
-            TIME MACHINE
-          </Text>
-          <Text variant="label" style={{ color: colors.text, fontWeight: '600', marginTop: 2 }}>
-            {context.headline}
-          </Text>
+          <Text style={styles.contextLabel}>ARCHIVE</Text>
+          <Text style={styles.contextHeadline}>{context.headline}</Text>
         </Animated.View>
       )}
 
-      {/* Chart */}
+      {/* ── Chart — hero visual ── */}
       <View style={styles.chartWrap}>
         <CandleChart
           candles={allCandles}
@@ -303,7 +302,7 @@ export default function RoundScreen() {
           splitIndex={phase !== 'deciding' ? episode.before.length : undefined}
           revealCount={revealCount}
           referenceLines={
-            phase !== 'deciding' && decision?.action === 'buy'
+            phase !== 'deciding' && decision?.action !== 'skip'
               ? { entry, stop: stopPrice, target: targetPrice }
               : undefined
           }
@@ -314,7 +313,7 @@ export default function RoundScreen() {
       {/* ── DECIDING: decision sheet ── */}
       {phase === 'deciding' && (
         <Animated.View
-          entering={SlideInDown.duration(350).springify()}
+          entering={SlideInDown.duration(380).springify()}
           style={styles.bottomSheet}
         >
           <DecisionSheet
@@ -325,288 +324,276 @@ export default function RoundScreen() {
         </Animated.View>
       )}
 
-      {/* ── REVEALING: progress control ── */}
+      {/* ── REVEALING: progress strip ── */}
       {phase === 'revealing' && !revealDone && (
-        <Animated.View entering={FadeIn.duration(200)} style={styles.revealControl}>
-          <View style={styles.revealProgressTrack}>
-            <View style={[styles.revealProgressFill, { width: `${Math.round(revealPct * 100)}%` as any }]} />
+        <Animated.View entering={FadeIn.duration(200)} style={styles.revealStrip}>
+          <View style={styles.revealTrack}>
+            <View style={[styles.revealFill, { width: `${Math.round(revealPct * 100)}%` as any }]} />
           </View>
           <View style={styles.revealRow}>
-            <Text variant="caption" style={{ color: colors.muted }}>
-              {decision?.action === 'skip' ? 'Watching market…' : 'Trade in progress…'}
+            <Text style={styles.revealStatus}>
+              {decision?.action === 'skip' ? 'Watching market…' : decision?.action === 'short' ? 'Short in progress…' : 'Long in progress…'}
             </Text>
-            <Pressable
-              onPress={skipReveal}
-              hitSlop={12}
-              accessibilityRole="button"
-              accessibilityLabel="Skip animation"
-            >
-              <Text variant="caption" style={{ color: colors.brand }}>
-                Skip ›
-              </Text>
+            <Pressable onPress={skipReveal} hitSlop={12} accessibilityRole="button">
+              <Text style={styles.revealSkip}>Skip →</Text>
             </Pressable>
           </View>
         </Animated.View>
       )}
 
-      {/* ── REVEALING: reveal done → see result ── */}
+      {/* ── REVEALING done: see result ── */}
       {phase === 'revealing' && revealDone && (
-        <Animated.View entering={FadeInUp.duration(280).springify()} style={styles.revealCard}>
-          <Card variant="elevated" style={styles.revealCardInner}>
-            <View style={styles.revealHeader}>
+        <Animated.View entering={FadeInUp.duration(320).springify()} style={styles.revealCard}>
+          <View style={styles.revealCardInner}>
+            {/* PnL hero */}
+            <View style={styles.revealPnlRow}>
               <View>
-                <Text variant="caption" style={{ letterSpacing: 0.5 }}>
-                  {episode.asset.symbol} · {decision?.action === 'skip' ? 'SKIPPED' : 'TRADED'}
+                <Text style={styles.revealEyebrow}>
+                  {decision?.action === 'skip' ? 'SKIPPED' : decision?.action === 'short' ? 'SHORT' : 'LONG'} · {episode.asset.symbol}
                 </Text>
-                <Text
-                  variant="numericLarge"
-                  style={{
-                    color: userReturn >= 0 ? colors.gain : colors.loss,
-                    fontSize: 40,
-                    marginTop: 4,
-                  }}
-                >
+                <Text style={[styles.revealPnl, { color: userReturn >= 0 ? colors.gain : colors.loss }]}>
                   {formatReturn(userReturn)}
                 </Text>
               </View>
               <View style={[
-                styles.revealOutcomeBox,
-                { backgroundColor: userReturn >= 0 ? `${colors.gain}18` : `${colors.loss}18` },
+                styles.revealDirectionBox,
+                { backgroundColor: userReturn >= 0.05 ? colors.gainSoft : userReturn <= -0.05 ? colors.lossSoft : `${colors.muted}12` },
               ]}>
-                <Text style={{ fontSize: 28 }}>
-                  {userReturn >= 0.05 ? '📈' : userReturn <= -0.05 ? '📉' : '➡️'}
+                <Text style={[styles.revealDirectionArrow, {
+                  color: userReturn >= 0.05 ? colors.gain : userReturn <= -0.05 ? colors.loss : colors.muted,
+                }]}>
+                  {userReturn >= 0.05 ? '▲' : userReturn <= -0.05 ? '▼' : '—'}
                 </Text>
               </View>
             </View>
 
-            {/* Bot comparison during reveal */}
-            <View style={styles.revealCompare}>
-              <View style={styles.revealCompareItem}>
-                <Text variant="caption">Bot</Text>
-                <Text
-                  variant="numeric"
-                  style={{ fontSize: 14, color: episode.baselines.bot_return >= 0 ? colors.gain : colors.loss }}
-                >
-                  {formatReturn(episode.baselines.bot_return)}
-                </Text>
-              </View>
-              <View style={styles.revealCompareItem}>
-                <Text variant="caption">Hold</Text>
-                <Text
-                  variant="numeric"
-                  style={{ fontSize: 14, color: episode.baselines.hold_return >= 0 ? colors.gain : colors.loss }}
-                >
-                  {formatReturn(episode.baselines.hold_return)}
-                </Text>
-              </View>
+            {/* Bot / Hold comparison — thin bars */}
+            <View style={styles.compareRow}>
+              {([
+                { label: 'You',  value: userReturn,               you: true },
+                { label: 'Bot',  value: episode.baselines.bot_return,  you: false },
+                { label: 'Hold', value: episode.baselines.hold_return, you: false },
+              ] as const).map(({ label, value, you }) => (
+                <View key={label} style={styles.compareCol}>
+                  <Text style={[styles.compareLabel, you && { color: colors.textSub }]}>{label}</Text>
+                  <Text style={[
+                    styles.compareValue,
+                    { color: value >= 0 ? colors.gain : colors.loss },
+                    you && { color: value >= 0 ? colors.gain : colors.loss },
+                  ]}>
+                    {formatReturn(value)}
+                  </Text>
+                </View>
+              ))}
             </View>
 
-            <PrimaryButton label="See result →" onPress={onSeeResult} />
-          </Card>
+            {saveError && (
+              <Text style={styles.saveErrorText}>Save failed — tap to retry</Text>
+            )}
+
+            <PrimaryButton label="See Result" onPress={onSeeResult} />
+          </View>
         </Animated.View>
       )}
 
-      {/* ── RESULT: full result card ── */}
+      {/* ── RESULT: full result panel ── */}
       {phase === 'result' && savedResult && (
-        <Animated.View entering={FadeInUp.duration(320).springify()} style={styles.resultWrap}>
+        <Animated.View entering={FadeInUp.duration(360).springify()} style={styles.resultWrap}>
           <ScrollView
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 8 }}
+            contentContainerStyle={styles.resultScroll}
           >
-            <Card variant="elevated" style={styles.resultCard}>
-
-              {/* Outcome header */}
-              <View style={styles.resultOutcomeRow}>
-                <View>
-                  <Text variant="caption" style={{ letterSpacing: 0.8 }}>
-                    {savedResult.action === 'skip' ? 'SKIPPED' : 'TRADED'}
-                    {' · '}{episode.asset.symbol}
-                  </Text>
-                  <Text
-                    variant="numericLarge"
-                    style={{
-                      color: userReturn >= 0 ? colors.gain : colors.loss,
-                      fontSize: 44,
-                      marginTop: 4,
-                    }}
-                  >
-                    {formatReturn(userReturn)}
-                  </Text>
-                </View>
-                <Animated.View
-                  entering={ZoomIn.springify().damping(10).stiffness(260).mass(0.7).delay(200)}
-                  style={styles.srBadge}
-                >
-                  <Text style={[
-                    styles.srDeltaText,
-                    { color: displaySrDelta >= 0 ? colors.gain : colors.loss },
-                  ]}>
-                    {displaySrDelta >= 0 ? '+' : ''}{displaySrDelta}
-                  </Text>
-                  <Text variant="caption" style={{ textAlign: 'center' }}>SR</Text>
-                </Animated.View>
+            {/* Hero PnL */}
+            <View style={styles.resultHero}>
+              <View>
+                <Text style={styles.resultEyebrow}>
+                  {savedResult.action === 'skip' ? 'SKIPPED' : savedResult.action.toUpperCase()} · {episode.asset.symbol}
+                </Text>
+                <Text style={[styles.resultPnl, {
+                  color: userReturn >= 0 ? colors.gain : userReturn < 0 ? colors.loss : colors.muted,
+                }]}>
+                  {formatReturn(userReturn)}
+                </Text>
               </View>
 
-              {/* SR line */}
-              <View style={styles.srLine}>
-                <Text variant="caption">Skill Rating</Text>
-                <View style={styles.srLineRight}>
-                  <Text variant="numeric" style={{ fontSize: 13, color: colors.muted }}>
-                    {Math.round(displaySrBefore)}
+              {/* SR delta badge */}
+              <View style={[styles.srBadge, { borderColor: displaySrDelta >= 0 ? `${colors.gain}30` : `${colors.loss}30` }]}>
+                <Text style={[styles.srDeltaNum, { color: displaySrDelta >= 0 ? colors.gain : colors.loss }]}>
+                  {displaySrDelta >= 0 ? '+' : ''}{displaySrDelta}
+                </Text>
+                <Text style={styles.srDeltaLabel}>SR</Text>
+              </View>
+            </View>
+
+            {/* SR line */}
+            <View style={styles.srLine}>
+              <Text style={styles.srLineLabel}>Skill Rating</Text>
+              <View style={styles.srLineRight}>
+                <Text style={styles.srLineBefore}>{Math.round(displaySrBefore)}</Text>
+                <Text style={styles.srLineArrow}>→</Text>
+                <Text style={styles.srLineAfter}>{Math.round(displaySrAfter)}</Text>
+                <Text style={[styles.srLineLevel, { color: levelColors[displayLevel] }]}>
+                  {displayLevel}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.divider} />
+
+            {/* You vs Bot vs Hold */}
+            <View style={styles.comparisonSection}>
+              {([
+                { label: 'You',  value: userReturn,                    you: true },
+                { label: 'Bot',  value: episode.baselines.bot_return,  you: false },
+                { label: 'Hold', value: episode.baselines.hold_return, you: false },
+              ] as const).map(({ label, value, you }) => (
+                <View key={label} style={[styles.compItem, you && styles.compItemYou]}>
+                  <Text style={[styles.compLabel, you && { color: colors.textSub }]}>
+                    {label.toUpperCase()}
                   </Text>
-                  <Text variant="caption" style={{ marginHorizontal: 4 }}>→</Text>
-                  <Text variant="numeric" style={{ fontSize: 15, color: colors.text }}>
-                    {Math.round(displaySrAfter)}
-                  </Text>
-                  <Text
-                    variant="caption"
-                    style={{ color: levelColors[displayLevel], marginLeft: 6, fontWeight: '700' }}
-                  >
-                    {displayLevel}
+                  <Text style={[styles.compValue, {
+                    color: value >= 0 ? colors.gain : colors.loss,
+                  }]}>
+                    {formatReturn(value)}
                   </Text>
                 </View>
+              ))}
+            </View>
+
+            <View style={styles.divider} />
+
+            {/* Insight */}
+            {insights.length > 0 && (
+              <View style={styles.insightCard}>
+                <View style={styles.insightDot} />
+                <Text style={styles.insightText}>{insights[0]}</Text>
               </View>
+            )}
 
-              <View style={styles.divider} />
+            {/* Tags */}
+            <View style={styles.tagRow}>
+              {episode.tags.map((t) => (
+                <Text key={t} style={styles.tagText}>{t.replace(/_/g, ' ')}</Text>
+              ))}
+              <Text style={[styles.tagText, { color: colors.muted, opacity: 0.6 }]}>
+                {DIFFICULTY_LABEL[episode.difficulty]}
+              </Text>
+            </View>
 
-              {/* Comparison table */}
-              <View style={styles.comparison}>
-                {(
-                  [
-                    { label: 'You',  value: userReturn,                    highlight: true },
-                    { label: 'Bot',  value: episode.baselines.bot_return,  highlight: false },
-                    { label: 'Hold', value: episode.baselines.hold_return, highlight: false },
-                  ] as const
-                ).map(({ label, value, highlight }) => (
-                  <View
-                    key={label}
-                    style={[
-                      styles.compareItem,
-                      highlight && styles.compareItemYou,
-                    ]}
-                  >
-                    <Text variant="caption" style={{ letterSpacing: 0.5 }}>
-                      {label.toUpperCase()}
-                    </Text>
-                    <Text
-                      variant="numeric"
-                      style={{
-                        color: value >= 0 ? colors.gain : colors.loss,
-                        fontSize: 16,
-                        marginTop: 3,
-                      }}
-                    >
-                      {formatReturn(value)}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-
-              {/* Tags */}
-              <View style={styles.tagRow}>
-                {episode.tags.map((t) => (
-                  <View key={t} style={styles.tagChip}>
-                    <Text style={styles.tagText}>
-                      {t.replace(/_/g, ' ').toUpperCase()}
-                    </Text>
-                  </View>
-                ))}
-                <View style={[styles.tagChip, styles.tagDifficulty]}>
-                  <Text style={[styles.tagText, { color: DIFFICULTY_COLOR[episode.difficulty] }]}>
-                    {DIFFICULTY_LABEL[episode.difficulty]}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.divider} />
-
-              {/* Insights */}
-              {insights.length > 0 && (
-                <View style={{ gap: space.sm, marginBottom: space.sm }}>
-                  {insights.map((ins, i) => (
-                    <View key={`ins-${i}`} style={styles.insightRow}>
-                      <View style={styles.insightDot} />
-                      <Text variant="body" style={styles.insightText}>{ins}</Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-
-              <PrimaryButton
-                label={
-                  isInSession && sessionIndex! + 1 < sessionTotal!
-                    ? `Next chart  ${sessionIndex! + 2} / ${sessionTotal}`
-                    : 'Done'
-                }
-                onPress={onNext}
-              />
-            </Card>
+            <PrimaryButton
+              label={
+                isInSession && sessionIndex! + 1 < sessionTotal!
+                  ? `Next  ${sessionIndex! + 2} / ${sessionTotal}`
+                  : 'Done'
+              }
+              onPress={onNext}
+              style={styles.nextBtn}
+            />
           </ScrollView>
         </Animated.View>
       )}
-
     </View>
   )
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const DIFFICULTY_LABEL: Record<1 | 2 | 3, string> = {
-  1: 'EASY',
-  2: 'MEDIUM',
-  3: 'HARD',
-}
-
-const DIFFICULTY_COLOR: Record<1 | 2 | 3, string> = {
-  1: colors.gain,
-  2: colors.warn,
-  3: colors.loss,
-}
+const DIFFICULTY_LABEL: Record<1 | 2 | 3, string> = { 1: 'Easy', 2: 'Standard', 3: 'Hard' }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
+  root: { flex: 1 },
+
+  // Top bar
   topBar: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: space.lg,
+    justifyContent: 'space-between',
+    paddingHorizontal: SCREEN_PAD,
     paddingBottom: space.sm,
+    gap: space.md,
   },
-  topLeft: { flexDirection: 'row', alignItems: 'center', gap: space.sm, flex: 1 },
-  topRight: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  sessionPill: {
-    backgroundColor: `${colors.brand}18`,
-    borderRadius: 99,
-    paddingHorizontal: space.sm,
-    paddingVertical: 3,
-    borderWidth: 1,
-    borderColor: `${colors.brand}40`,
+  closeBtn: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  tmBadge: {
-    backgroundColor: `${colors.warn}18`,
-    borderRadius: 99,
-    paddingHorizontal: space.sm,
-    paddingVertical: 3,
-    borderWidth: 1,
-    borderColor: `${colors.warn}35`,
+  closeBtnText: {
+    fontFamily: fonts.ui,
+    fontSize: 24,
+    color: colors.muted,
+    lineHeight: 28,
+  },
+  topCenter: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 4,
+  },
+  progressDots: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  progressDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  progressDotDone:    { backgroundColor: colors.gold },
+  progressDotPending: { backgroundColor: colors.bg3 },
+  topPair: {
+    fontFamily: fonts.uiMedium,
+    fontSize: 12,
+    color: colors.textSub,
+    letterSpacing: 0.5,
+  },
+  topDifficulty: {
+    fontFamily: fonts.ui,
+    fontSize: 11,
+    color: colors.muted,
+    width: 60,
+    textAlign: 'right',
   },
 
+  // Context banner (Time Machine)
   contextBanner: {
-    marginHorizontal: space.lg,
+    marginHorizontal: SCREEN_PAD,
     marginBottom: space.sm,
-    backgroundColor: `${colors.warn}10`,
-    borderRadius: radius.card,
-    padding: space.md,
+    backgroundColor: colors.bg2,
+    borderRadius: radius.md,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
     borderWidth: 1,
-    borderColor: `${colors.warn}28`,
+    borderColor: colors.lineChampagneSoft,
+    gap: 3,
+  },
+  contextLabel: {
+    fontFamily: fonts.uiMedium,
+    fontSize: 9,
+    letterSpacing: 2,
+    color: colors.gold,
+  },
+  contextHeadline: {
+    fontFamily: fonts.uiSemiBold,
+    fontSize: 13,
+    color: colors.text,
+    lineHeight: 18,
   },
 
+  // Chart
   chartWrap: { flex: 1 },
-  bottomSheet: { position: 'absolute', bottom: 0, left: 0, right: 0 },
 
-  // Reveal progress control
-  revealControl: {
+  // Bottom sheet anchor
+  bottomSheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+  },
+
+  // Reveal strip
+  revealStrip: {
     position: 'absolute',
     bottom: 0,
     left: 0,
@@ -614,26 +601,35 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg1,
     borderTopWidth: 1,
     borderTopColor: colors.line,
-    paddingHorizontal: space.lg,
-    paddingTop: space.sm,
-    paddingBottom: 32,
+    paddingHorizontal: SCREEN_PAD,
+    paddingTop: space.md,
+    paddingBottom: 36,
     gap: space.sm,
   },
-  revealProgressTrack: {
-    height: 3,
-    backgroundColor: colors.bg2,
-    borderRadius: 2,
+  revealTrack: {
+    height: 1,
+    backgroundColor: colors.bg3,
+    borderRadius: 1,
     overflow: 'hidden',
   },
-  revealProgressFill: {
-    height: 3,
-    backgroundColor: colors.brand,
-    borderRadius: 2,
+  revealFill: {
+    height: 1,
+    backgroundColor: colors.gold,
   },
   revealRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  revealStatus: {
+    fontFamily: fonts.ui,
+    fontSize: 13,
+    color: colors.muted,
+  },
+  revealSkip: {
+    fontFamily: fonts.uiMedium,
+    fontSize: 13,
+    color: colors.gold,
   },
 
   // Reveal done card
@@ -644,135 +640,253 @@ const styles = StyleSheet.create({
     right: 0,
   },
   revealCardInner: {
-    margin: space.lg,
-    gap: space.md,
+    margin: SCREEN_PAD,
+    backgroundColor: colors.bg1,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: colors.line,
+    padding: space.xxl,
+    gap: space.lg,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 10,
   },
-  revealHeader: {
+  revealPnlRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  revealOutcomeBox: {
-    width: 56,
-    height: 56,
-    borderRadius: 14,
+  revealEyebrow: {
+    fontFamily: fonts.uiMedium,
+    fontSize: 11,
+    letterSpacing: 1.5,
+    color: colors.muted,
+  },
+  revealPnl: {
+    fontFamily: fonts.serifBold,
+    fontSize: 44,
+    lineHeight: 50,
+    letterSpacing: -0.5,
+    fontVariant: ['tabular-nums'],
+    marginTop: 2,
+  },
+  revealDirectionBox: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  revealCompare: {
+  revealDirectionArrow: {
+    fontFamily: fonts.displayBold,
+    fontSize: 20,
+  },
+  compareRow: {
     flexDirection: 'row',
     gap: space.sm,
   },
-  revealCompareItem: {
+  compareCol: {
     flex: 1,
     backgroundColor: colors.bg2,
-    borderRadius: 8,
+    borderRadius: radius.sm,
     padding: space.sm,
     gap: 2,
   },
+  compareLabel: {
+    fontFamily: fonts.ui,
+    fontSize: 10,
+    color: colors.muted,
+    letterSpacing: 0.5,
+  },
+  compareValue: {
+    fontFamily: fonts.display,
+    fontSize: 14,
+    fontVariant: ['tabular-nums'],
+  },
+  saveErrorText: {
+    fontFamily: fonts.ui,
+    fontSize: 13,
+    color: colors.loss,
+    textAlign: 'center',
+  },
 
-  // Result card
+  // Result panel
   resultWrap: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    maxHeight: '65%',
+    maxHeight: '68%',
+    backgroundColor: colors.bg1,
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
+    borderTopWidth: 1,
+    borderColor: colors.line,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 16,
   },
-  resultCard: {
-    margin: space.lg,
-    gap: space.md,
+  resultScroll: {
+    padding: space.xxl,
+    gap: space.lg,
+    paddingBottom: 48,
   },
-  resultOutcomeRow: {
+
+  resultHero: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
   },
+  resultEyebrow: {
+    fontFamily: fonts.uiMedium,
+    fontSize: 10,
+    letterSpacing: 2,
+    color: colors.muted,
+    marginBottom: 4,
+  },
+  resultPnl: {
+    fontFamily: fonts.serifBold,
+    fontSize: 52,
+    lineHeight: 58,
+    letterSpacing: -0.5,
+    fontVariant: ['tabular-nums'],
+  },
   srBadge: {
     backgroundColor: colors.bg2,
-    borderRadius: 10,
+    borderRadius: radius.md,
     paddingHorizontal: space.md,
     paddingVertical: space.sm,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: colors.line,
-    minWidth: 60,
+    minWidth: 56,
   },
-  srDeltaText: {
-    fontFamily: 'SpaceGrotesk_700Bold',
+  srDeltaNum: {
+    fontFamily: fonts.serifBold,
     fontSize: 20,
     lineHeight: 24,
     fontVariant: ['tabular-nums'],
   },
+  srDeltaLabel: {
+    fontFamily: fonts.ui,
+    fontSize: 10,
+    color: colors.muted,
+    letterSpacing: 1,
+  },
+
   srLine: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  srLineLabel: {
+    fontFamily: fonts.ui,
+    fontSize: 13,
+    color: colors.muted,
+  },
   srLineRight: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: space.xs,
   },
+  srLineBefore: {
+    fontFamily: fonts.display,
+    fontSize: 13,
+    color: colors.muted,
+    fontVariant: ['tabular-nums'],
+  },
+  srLineArrow: {
+    fontFamily: fonts.ui,
+    fontSize: 11,
+    color: colors.muted,
+    paddingHorizontal: 2,
+  },
+  srLineAfter: {
+    fontFamily: fonts.display,
+    fontSize: 15,
+    color: colors.text,
+    fontVariant: ['tabular-nums'],
+  },
+  srLineLevel: {
+    fontFamily: fonts.uiMedium,
+    fontSize: 12,
+    letterSpacing: 0.3,
+  },
+
   divider: {
     height: 1,
     backgroundColor: colors.line,
   },
-  comparison: {
+
+  comparisonSection: {
     flexDirection: 'row',
     gap: space.sm,
   },
-  compareItem: {
+  compItem: {
     flex: 1,
     backgroundColor: colors.bg2,
-    borderRadius: radius.card,
+    borderRadius: radius.sm,
     padding: space.md,
     alignItems: 'center',
+    gap: 3,
   },
-  compareItemYou: {
+  compItemYou: {
+    backgroundColor: colors.bg3,
     borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.bg1,
+    borderColor: colors.lineChampagneSoft,
   },
-  tagRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: space.xs,
-  },
-  tagChip: {
-    backgroundColor: `${colors.brand}14`,
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderWidth: 1,
-    borderColor: `${colors.brand}28`,
-  },
-  tagDifficulty: {
-    backgroundColor: 'transparent',
-    borderColor: colors.line,
-  },
-  tagText: {
-    fontFamily: 'SpaceGrotesk_700Bold',
+  compLabel: {
+    fontFamily: fonts.uiMedium,
     fontSize: 9,
-    color: colors.brand,
-    letterSpacing: 0.8,
+    letterSpacing: 1.2,
+    color: colors.muted,
   },
-  insightRow: {
+  compValue: {
+    fontFamily: fonts.display,
+    fontSize: 15,
+    fontVariant: ['tabular-nums'],
+  },
+
+  insightCard: {
     flexDirection: 'row',
     gap: space.sm,
     alignItems: 'flex-start',
+    backgroundColor: colors.bg2,
+    borderRadius: radius.md,
+    paddingVertical: space.md,
+    paddingHorizontal: space.md,
   },
   insightDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: colors.brand,
-    marginTop: 9,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.gold,
+    marginTop: 8,
     flexShrink: 0,
   },
   insightText: {
     flex: 1,
-    color: colors.muted,
-    fontSize: 14,
-    lineHeight: 22,
+    fontFamily: fonts.ui,
+    fontSize: 13,
+    color: colors.textSub,
+    lineHeight: 20,
   },
+
+  tagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: space.sm,
+  },
+  tagText: {
+    fontFamily: fonts.uiMedium,
+    fontSize: 11,
+    color: colors.muted,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+
+  nextBtn: { marginTop: space.xs },
 })

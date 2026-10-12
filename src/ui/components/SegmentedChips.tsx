@@ -1,7 +1,8 @@
+// Equal-width segmented control — all chips fill available width, nothing clipped.
 import React from 'react'
-import { View } from 'react-native'
-import { Chip } from '@/src/ui/components/Chip'
-import { space } from '@/src/ui/theme'
+import { StyleSheet, View } from 'react-native'
+import { SegmentedChip } from '@/src/ui/components/Chip'
+import { colors, radius, space } from '@/src/ui/theme'
 
 export function SegmentedChips<T extends string>({
   options,
@@ -13,12 +14,9 @@ export function SegmentedChips<T extends string>({
   onChange: (value: T) => void
 }) {
   return (
-    <View
-      style={{ flexDirection: 'row', gap: space.sm }}
-      accessibilityRole="radiogroup"
-    >
+    <View style={styles.track}>
       {options.map((opt) => (
-        <Chip
+        <SegmentedChip
           key={opt.value}
           label={opt.label}
           selected={opt.value === value}
@@ -28,3 +26,13 @@ export function SegmentedChips<T extends string>({
     </View>
   )
 }
+
+const styles = StyleSheet.create({
+  track: {
+    flexDirection: 'row',
+    backgroundColor: colors.bg3,
+    borderRadius: radius.md,
+    padding: 3,
+    gap: 2,
+  },
+})

@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useRouter } from 'expo-router'
 import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
@@ -27,12 +28,13 @@ import { loadState } from '@/src/state/store'
 
 // ─── Campaign metadata ────────────────────────────────────────────────────────
 
+// Distinct tonal accents within old-money palette — no neon, no rainbow
 const CAMPAIGN_ACCENT: Record<string, string> = {
-  ftx_collapse_2022:       colors.loss,
-  luna_crash_2022:         colors.loss,
-  aug_flush_2024:          colors.warn,
-  tariff_shock_2025:       colors.warn,
-  liquidation_cascade_2025: colors.brand,
+  ftx_collapse_2022:        '#9B6B5A',  // muted terracotta
+  luna_crash_2022:          '#7A6B9B',  // dusty violet
+  aug_flush_2024:           '#5A7A8A',  // slate teal
+  tariff_shock_2025:        '#7A8A5A',  // sage
+  liquidation_cascade_2025: '#C9A96E',  // champagne gold
 }
 
 // Short editorial descriptor per campaign — one line, no sensationalism
@@ -126,29 +128,11 @@ const sparkStyles = StyleSheet.create({
   bar: { width: 3, borderRadius: 1 },
 })
 
-// ─── Tag chip ────────────────────────────────────────────────────────────────
-
-function TagChip({ tag, color }: { tag: PatternTag; color: string }) {
-  return (
-    <View style={[tagStyles.chip, { borderColor: `${color}35` }]}>
-      <Text style={[tagStyles.label, { color: `${color}CC` }]}>
-        {TAG_LABEL[tag] ?? tag.toUpperCase()}
-      </Text>
-    </View>
-  )
-}
-
 const tagStyles = StyleSheet.create({
-  chip: {
-    borderWidth: 1,
-    borderRadius: 4,
-    paddingVertical: 2,
-    paddingHorizontal: 5,
-  },
-  label: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 9,
-    letterSpacing: 0.6,
+  tagLine: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    letterSpacing: 0.2,
   },
 })
 
@@ -172,7 +156,7 @@ function CampaignCard({
     transform: [{ scale: withSpring(pressed.value ? 0.975 : 1, springs.snappy) }],
   }))
 
-  const accent = CAMPAIGN_ACCENT[campaign.id] ?? colors.brand
+  const accent = CAMPAIGN_ACCENT[campaign.id] ?? colors.gold
   const eps = getCampaignEpisodes(campaign)
   const maxDiff = getMaxDifficulty(eps)
   const tags = getUniqueTags(eps)
@@ -223,11 +207,9 @@ function CampaignCard({
 
           {/* Footer: tags + checkpoint count */}
           <View style={cardStyles.footer}>
-            <View style={cardStyles.tagRow}>
-              {tags.map((t) => (
-                <TagChip key={t} tag={t} color={accent} />
-              ))}
-            </View>
+            <Text style={[tagStyles.tagLine, { color: `${accent}99`, flex: 1 }]}>
+              {tags.map((t) => TAG_LABEL[t] ?? t).join(' · ')}
+            </Text>
             <Text style={cardStyles.checkpointCount}>
               {campaign.episodeIds.length} chart{campaign.episodeIds.length !== 1 ? 's' : ''}
             </Text>
@@ -246,7 +228,7 @@ const cardStyles = StyleSheet.create({
     borderColor: colors.line,
     padding: space.lg,
     gap: space.md,
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.18,
     shadowRadius: 10,
@@ -264,8 +246,8 @@ const cardStyles = StyleSheet.create({
   periodBadge: {
     borderRadius: 5,
     borderWidth: 1,
-    paddingVertical: 3,
-    paddingHorizontal: 7,
+    paddingVertical: space.xs,
+    paddingHorizontal: space.sm,
   },
   periodText: {
     fontFamily: 'Inter_700Bold',
@@ -282,8 +264,8 @@ const cardStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: `${colors.loss}35`,
     borderRadius: 4,
-    paddingVertical: 2,
-    paddingHorizontal: 5,
+    paddingVertical: space.xs,
+    paddingHorizontal: space.sm,
   },
   hardText: {
     fontFamily: 'Inter_700Bold',
@@ -296,8 +278,8 @@ const cardStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: `${colors.gain}35`,
     borderRadius: 4,
-    paddingVertical: 2,
-    paddingHorizontal: 5,
+    paddingVertical: space.xs,
+    paddingHorizontal: space.sm,
   },
   doneText: {
     fontFamily: 'Inter_600SemiBold',
@@ -307,10 +289,10 @@ const cardStyles = StyleSheet.create({
   },
   titleBlock: { gap: 3 },
   title: {
-    fontFamily: 'SpaceGrotesk_700Bold',
+    fontFamily: 'PlayfairDisplay_700Bold',
     fontSize: 20,
-    lineHeight: 24,
-    letterSpacing: -0.4,
+    lineHeight: 26,
+    letterSpacing: -0.2,
     color: colors.text,
   },
   descriptor: {
@@ -325,7 +307,7 @@ const cardStyles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  tagRow: { flexDirection: 'row', gap: 5, flexWrap: 'wrap', flex: 1 },
+
   checkpointCount: {
     fontFamily: 'Inter_500Medium',
     fontSize: 11,
@@ -348,7 +330,7 @@ function CampaignDetail({
   onStart: (c: Campaign) => void
 }) {
   const eps = getCampaignEpisodes(campaign)
-  const accent = CAMPAIGN_ACCENT[campaign.id] ?? colors.brand
+  const accent = CAMPAIGN_ACCENT[campaign.id] ?? colors.gold
   const maxDiff = getMaxDifficulty(eps)
   const isCompleted = status.state === 'completed'
 
@@ -444,9 +426,11 @@ function CampaignDetail({
 
                 {/* Tags + difficulty */}
                 <View style={detailStyles.epMeta}>
-                  {epTags.map((t) => (
-                    <TagChip key={t} tag={t} color={accent} />
-                  ))}
+                  {epTags.length > 0 && (
+                    <Text style={[tagStyles.tagLine, { color: `${accent}99` }]}>
+                      {epTags.map((t) => TAG_LABEL[t] ?? t).join(' · ')}
+                    </Text>
+                  )}
                   <View style={[detailStyles.diffBadge, { borderColor: `${diffColor}35` }]}>
                     <Text style={[detailStyles.diffText, { color: diffColor }]}>{diffLabel}</Text>
                   </View>
@@ -485,8 +469,8 @@ const detailStyles = StyleSheet.create({
   periodBadge: {
     borderRadius: 5,
     borderWidth: 1,
-    paddingVertical: 3,
-    paddingHorizontal: 7,
+    paddingVertical: space.xs,
+    paddingHorizontal: space.sm,
   },
   periodText: {
     fontFamily: 'Inter_700Bold',
@@ -589,15 +573,15 @@ const detailStyles = StyleSheet.create({
   epMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: space.sm,
     flexWrap: 'wrap',
     marginTop: 2,
   },
   diffBadge: {
     borderWidth: 1,
     borderRadius: 4,
-    paddingVertical: 2,
-    paddingHorizontal: 5,
+    paddingVertical: space.xs,
+    paddingHorizontal: space.sm,
   },
   diffText: {
     fontFamily: 'Inter_600SemiBold',
@@ -639,7 +623,9 @@ export default function TimeMachineScreen() {
     if (eps.length === 0) return
     navigating.current = true
     haptics.confirm()
-    ;(global as any).__pendingDailyIds = eps.map((e) => e.id)
+    const sessionIds = eps.map((e) => e.id)
+    ;(global as any).__pendingDailyIds = sessionIds
+    AsyncStorage.setItem('@dojo/pendingSessionIds', JSON.stringify(sessionIds))
     router.push({
       pathname: '/round',
       params: {
@@ -753,13 +739,13 @@ const screenStyles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
     fontSize: 10,
     letterSpacing: 1.8,
-    color: colors.warn,
+    color: colors.gold,
   },
   headerTitle: {
-    fontFamily: 'SpaceGrotesk_700Bold',
+    fontFamily: 'PlayfairDisplay_700Bold',
     fontSize: 34,
-    lineHeight: 40,
-    letterSpacing: -0.8,
+    lineHeight: 42,
+    letterSpacing: -0.3,
     color: colors.text,
   },
   headerBody: {

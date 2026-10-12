@@ -1,10 +1,10 @@
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useRouter } from 'expo-router'
 import React, { useCallback, useRef, useState } from 'react'
 import { ScrollView, StyleSheet, View } from 'react-native'
 import Animated, { FadeInDown } from 'react-native-reanimated'
 import { useFocusEffect } from '@react-navigation/native'
-import { Card } from '@/src/ui/components/Card'
 import { Chip } from '@/src/ui/components/Chip'
 import { PrimaryButton } from '@/src/ui/components/PrimaryButton'
 import { Screen } from '@/src/ui/components/Screen'
@@ -12,11 +12,12 @@ import { Text } from '@/src/ui/components/Text'
 import { SRBar } from '@/src/ui/components/SRBar'
 import { getLevel } from '@/src/engine/rating'
 import { episodes } from '@/src/content/episodes'
-import { colors, levelColors, radius, space } from '@/src/ui/theme'
+import { colors, fonts, levelColors, radius, space, SCREEN_PAD } from '@/src/ui/theme'
 import { haptics } from '@/src/ui/haptics'
 import type { PatternTag } from '@/src/content/types'
 import { useAppState } from '@/src/state/useAppState'
 import { getWeakTags } from '@/src/state/store'
+import { getLevelBand } from '@/src/ui/levelConfig'
 
 export default function TrainScreen() {
   const router = useRouter()
@@ -28,8 +29,10 @@ export default function TrainScreen() {
 
   const level      = getLevel(state.sr)
   const levelColor = levelColors[level]
+  const { nextBand } = getLevelBand(state.sr)
   const weakTags: PatternTag[] = getWeakTags(state.history)
   const lastResult = state.history[state.history.length - 1]
+  const srToNext   = nextBand ? nextBand.min - Math.round(state.sr) : 0
 
   const startDaily = async () => {
     if (startGuard.current) return
@@ -39,6 +42,7 @@ export default function TrainScreen() {
     try {
       const ids = await ensureDailyStarted()
       ;(global as any).__pendingDailyIds = ids
+      await AsyncStorage.setItem('@dojo/pendingSessionIds', JSON.stringify(ids))
       router.push({
         pathname: '/round',
         params: { episodeId: ids[0], sessionIndex: '0', sessionTotal: String(ids.length) },
@@ -60,8 +64,10 @@ export default function TrainScreen() {
   if (loading) {
     return (
       <Screen>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <Text variant="label">Loading…</Text>
+        <View style={styles.skeletonWrap}>
+          <View style={styles.skeletonHeader} />
+          <View style={styles.skeletonHero} />
+          <View style={styles.skeletonSm} />
         </View>
       </Screen>
     )
@@ -69,249 +75,407 @@ export default function TrainScreen() {
 
   return (
     <Screen>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header — wordmark + streak */}
-        <Animated.View entering={FadeInDown.duration(400).springify()} style={styles.header}>
-          <View>
-            <Text variant="caption" style={{ letterSpacing: 2, color: colors.muted }}>
-              DAILY #{dailyNumber}
-            </Text>
-            <Text variant="display" style={{ fontSize: 34, letterSpacing: -1 }}>Dojo</Text>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+
+        {/* ── Header: wordmark + SR pill ── */}
+        <Animated.View entering={FadeInDown.duration(380).springify()} style={styles.header}>
+          <Text style={styles.wordmark}>Dojo</Text>
+          <View style={[styles.srPill, { borderColor: `${levelColor}30` }]}>
+            <Text style={styles.srNum}>{Math.round(state.sr)}</Text>
+            <Text style={[styles.srLevel, { color: levelColor }]}>{level}</Text>
+          </View>
+        </Animated.View>
+
+        {/* ── Hero daily card — dark tonal, champagne border ── */}
+        <Animated.View entering={FadeInDown.duration(380).delay(60).springify()}>
+          {isDailyDone ? (
+            <View style={styles.doneCard}>
+              <View style={styles.doneIcon}>
+                <Text style={styles.doneCheck}>✓</Text>
+              </View>
+              <View style={{ flex: 1, gap: 3 }}>
+                <Text style={styles.doneTitle}>Daily #{dailyNumber} complete</Text>
+                <Text style={styles.doneSub}>Back tomorrow for a new set</Text>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.heroCard}>
+              {/* Champagne top edge */}
+              <View style={styles.heroEdge} />
+
+              <Text style={styles.heroEyebrow}>DAILY #{dailyNumber}</Text>
+              <Text style={styles.heroTitle}>
+                {dailyEpisodeIds.length} charts · ~{Math.ceil(dailyEpisodeIds.length * 0.35)} min
+              </Text>
+              <Text style={styles.heroSub}>Read the market. Beat the bot.</Text>
+
+              {/* Progress dots */}
+              <View style={styles.progressDots}>
+                {Array.from({ length: Math.min(dailyEpisodeIds.length, 10) }).map((_, i) => (
+                  <View key={i} style={styles.progressDot} />
+                ))}
+              </View>
+
+              <PrimaryButton
+                label={starting ? 'Setting up your charts…' : 'Start Training →'}
+                loading={starting}
+                onPress={startDaily}
+                style={styles.heroBtn}
+              />
+            </View>
+          )}
+        </Animated.View>
+
+        {/* ── SR detail row ── */}
+        <Animated.View entering={FadeInDown.duration(380).delay(100).springify()} style={styles.srRow}>
+          <View style={{ flex: 1, gap: 6 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={styles.srEyebrow}>SKILL RATING</Text>
+              {nextBand && <Text style={styles.srToNext}>{srToNext} to {nextBand.level}</Text>}
+            </View>
+            <SRBar sr={state.sr} compact />
           </View>
           {state.streakDays > 0 && (
             <View style={styles.streakBadge}>
               <Text style={styles.streakNum}>{state.streakDays}</Text>
-              <Text variant="caption" style={{ color: colors.warn, fontSize: 10 }}>day streak</Text>
+              <Text style={styles.streakLabel}>streak</Text>
             </View>
           )}
         </Animated.View>
 
-        {/* SR Card */}
-        <Animated.View entering={FadeInDown.duration(400).delay(60).springify()}>
-          <Card variant="elevated" style={styles.srCard}>
-            <View style={{ flex: 1, gap: space.sm }}>
-              <Text variant="caption" style={{ letterSpacing: 1 }}>SKILL RATING</Text>
-              <Text variant="numericLarge" style={{ marginTop: 0 }}>
-                {Math.round(state.sr)}
-              </Text>
-              <SRBar sr={state.sr} />
-            </View>
-            <View style={styles.levelBadge}>
-              <Text
-                variant="label"
-                style={{ color: levelColor, fontSize: 11, letterSpacing: 1 }}
-              >
-                LEVEL
-              </Text>
-              <Text
-                variant="title"
-                style={{ color: levelColor, fontSize: 22 }}
-              >
-                {level}
-              </Text>
-            </View>
-          </Card>
-        </Animated.View>
-
-        {/* Daily Card */}
-        <Animated.View entering={FadeInDown.duration(400).delay(120).springify()}>
-          {isDailyDone ? (
-            <Card variant="ghost" style={styles.dailyDoneCard}>
-              <View style={styles.dailyDoneRow}>
-                <View style={styles.doneMark}>
-                  <Text style={styles.doneCheck}>✓</Text>
-                </View>
-                <View style={{ flex: 1, gap: 2 }}>
-                  <Text variant="label" style={{ color: colors.gain, letterSpacing: 0.5 }}>
-                    DAILY #{dailyNumber} COMPLETE
-                  </Text>
-                  <Text style={{ color: colors.muted, fontSize: 14 }}>
-                    Come back tomorrow for your next set
-                  </Text>
-                </View>
-              </View>
-            </Card>
-          ) : (
-            <LinearGradient
-              colors={['#6B3FE7', '#8B5CFF', '#A67DFF']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.dailyCard}
-            >
-              <View style={styles.dailyCardInner}>
-                <View style={{ gap: 4 }}>
-                  <Text variant="caption" style={{ color: 'rgba(255,255,255,0.6)', letterSpacing: 1 }}>
-                    TODAY
-                  </Text>
-                  <Text variant="title" style={{ color: '#fff', fontSize: 22 }}>
-                    {dailyEpisodeIds.length} charts · ~3 min
-                  </Text>
-                  <Text variant="caption" style={{ color: 'rgba(255,255,255,0.5)' }}>
-                    Beat the bot. Earn your rating.
-                  </Text>
-                </View>
-                <View style={{ marginTop: space.lg }}>
-                  <PrimaryButton
-                    label={starting ? 'Loading…' : 'Start Daily →'}
-                    onPress={startDaily}
-                    disabled={starting}
-                    style={styles.dailyBtn}
-                  />
-                </View>
-              </View>
-            </LinearGradient>
-          )}
-        </Animated.View>
-
-        {/* Practice by topic */}
+        {/* ── Focus areas ── */}
         {weakTags.length > 0 && (
-          <Animated.View entering={FadeInDown.duration(400).delay(180).springify()} style={{ gap: space.md }}>
+          <Animated.View entering={FadeInDown.duration(380).delay(140).springify()} style={{ gap: space.sm }}>
             <View style={styles.sectionHeader}>
-              <Text variant="title" style={{ fontSize: 16 }}>Focus areas</Text>
-              <Text variant="caption">Based on your history</Text>
+              <Text style={styles.sectionTitle}>Focus areas</Text>
+              <Text variant="caption">From your history</Text>
             </View>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ gap: space.sm, paddingRight: space.lg }}
+              contentContainerStyle={{ gap: space.sm, paddingRight: SCREEN_PAD }}
             >
               {weakTags.map((tag) => (
-                <Chip
-                  key={tag}
-                  label={tag.replace(/_/g, ' ')}
-                  onPress={() => startPractice(tag)}
-                />
+                <Chip key={tag} label={tag.replace(/_/g, ' ')} onPress={() => startPractice(tag)} />
               ))}
             </ScrollView>
           </Animated.View>
         )}
 
-        {/* Last result — action + beat/missed */}
+        {/* ── Last round ── */}
         {lastResult && (
-          <Animated.View entering={FadeInDown.duration(400).delay(240).springify()}>
-            <Card style={{ gap: space.sm }}>
-              <View style={styles.lastResultHeader}>
-                <Text variant="label" style={{ letterSpacing: 0.5 }}>LAST ROUND</Text>
+          <Animated.View entering={FadeInDown.duration(380).delay(180).springify()}>
+            <View style={styles.lastCard}>
+              <View style={styles.lastHeader}>
+                <Text style={styles.sectionEyebrow}>LAST ROUND</Text>
                 <View style={[
-                  styles.resultOutcomePill,
-                  { backgroundColor: lastResult.score > 0 ? `${colors.gain}18` : lastResult.score < 0 ? `${colors.loss}18` : `${colors.muted}18` },
+                  styles.outcomePill,
+                  { backgroundColor: lastResult.score > 0 ? colors.gainSoft : lastResult.score < 0 ? colors.lossSoft : `${colors.muted}12` },
                 ]}>
-                  <Text style={{
-                    fontFamily: 'Inter_600SemiBold',
-                    fontSize: 12,
+                  <Text style={[styles.outcomePillText, {
                     color: lastResult.score > 0 ? colors.gain : lastResult.score < 0 ? colors.loss : colors.muted,
-                    letterSpacing: 0.3,
-                  }}>
+                  }]}>
                     {lastResult.score > 0 ? 'Beat bot' : lastResult.score < 0 ? 'Missed' : 'Neutral'}
                   </Text>
                 </View>
               </View>
-              <Text variant="caption" style={{ color: colors.muted }}>
-                {lastResult.action.toUpperCase()}
+              <Text variant="caption">
+                {lastResult.action === 'long' ? '▲ Long' : lastResult.action === 'short' ? '▼ Short' : '— Skip'}
                 {lastResult.tags.length > 0 && ` · ${lastResult.tags.slice(0, 2).map((t) => t.replace(/_/g, ' ')).join(', ')}`}
               </Text>
-            </Card>
+            </View>
           </Animated.View>
         )}
 
-        {/* Empty state — new user */}
+        {/* ── Empty state ── */}
         {state.history.length === 0 && (
-          <Animated.View entering={FadeInDown.duration(400).delay(300).springify()}>
-            <Card variant="ghost" style={styles.emptyCard}>
-              <View style={styles.emptyIcon}>
-                <Text style={styles.emptyIconText}>◆</Text>
-              </View>
-              <Text variant="title" style={{ textAlign: 'center' }}>Start your first Daily</Text>
-              <Text style={{ color: colors.muted, textAlign: 'center', fontSize: 14, lineHeight: 20 }}>
-                Make decisions on real historical charts.{'\n'}Your Skill Rating starts at 500.
-              </Text>
-            </Card>
+          <Animated.View entering={FadeInDown.duration(380).delay(200).springify()} style={styles.emptyCard}>
+            <View style={styles.emptyIcon}>
+              <Text style={styles.emptyIconGlyph}>◆</Text>
+            </View>
+            <Text style={styles.emptyTitle}>Your first session awaits</Text>
+            <Text style={styles.emptyBody}>
+              Make decisions on real historical charts.{'\n'}Skill Rating begins at 500.
+            </Text>
           </Animated.View>
         )}
+
       </ScrollView>
     </Screen>
   )
 }
 
 const styles = StyleSheet.create({
-  content: { padding: space.lg, gap: space.lg, paddingBottom: 100 },
+  content: {
+    padding: SCREEN_PAD,
+    gap: space.xl,
+    paddingBottom: 100,
+  },
 
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
-  streakBadge: {
+  skeletonWrap: { padding: SCREEN_PAD, gap: space.xl },
+  skeletonHeader: { height: 40,  borderRadius: radius.md,  backgroundColor: colors.bg2, opacity: 0.6 },
+  skeletonHero:   { height: 200, borderRadius: radius.card, backgroundColor: colors.bg2, opacity: 0.4 },
+  skeletonSm:     { height: 60,  borderRadius: radius.md,  backgroundColor: colors.bg2, opacity: 0.3 },
+
+  // Header
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: `${colors.warn}15`,
-    borderRadius: radius.card,
-    paddingVertical: space.sm,
+  },
+  wordmark: {
+    fontFamily: fonts.serif,
+    fontSize: 32,
+    letterSpacing: -0.5,
+    color: colors.text,
+  },
+  srPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.xs,
     paddingHorizontal: space.md,
+    paddingVertical: space.xs,
+    borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: `${colors.warn}30`,
+    backgroundColor: colors.bg2,
   },
-  streakNum: {
-    fontFamily: 'SpaceGrotesk_700Bold',
-    fontSize: 22,
-    color: colors.warn,
-    lineHeight: 26,
+  srNum: {
+    fontFamily: fonts.displayBold,
+    fontSize: 17,
+    color: colors.text,
+    fontVariant: ['tabular-nums'],
+  },
+  srLevel: {
+    fontFamily: fonts.uiMedium,
+    fontSize: 12,
+    letterSpacing: 0.3,
   },
 
-  srCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', gap: space.md },
-  levelBadge: { alignItems: 'flex-end', gap: 2 },
-
-  dailyCard: {
+  // Hero card — dark tonal, NO purple gradient
+  heroCard: {
+    backgroundColor: colors.bg2,
     borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: colors.lineChampagneSoft,
+    padding: SCREEN_PAD,
+    gap: space.md,
     overflow: 'hidden',
-    shadowColor: colors.brand,
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.4,
     shadowRadius: 20,
-    elevation: 12,
+    elevation: 10,
   },
-  dailyCardInner: { padding: space.lg },
-  dailyBtn: { alignSelf: 'flex-start', backgroundColor: 'rgba(255,255,255,0.12)', borderColor: 'rgba(255,255,255,0.25)' },
+  heroEdge: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: colors.lineChampagne,
+  },
+  heroEyebrow: {
+    fontFamily: fonts.uiMedium,
+    fontSize: 9,
+    letterSpacing: 2.5,
+    color: colors.gold,
+  },
+  heroTitle: {
+    fontFamily: fonts.serif,
+    fontSize: 30,
+    letterSpacing: -0.3,
+    color: colors.text,
+    lineHeight: 36,
+  },
+  heroSub: {
+    fontFamily: fonts.ui,
+    fontSize: 13,
+    color: colors.muted,
+  },
+  progressDots: {
+    flexDirection: 'row',
+    gap: 5,
+    marginTop: space.xs,
+  },
+  progressDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: colors.bg3,
+    borderWidth: 1,
+    borderColor: colors.lineChampagneSoft,
+  },
+  heroBtn: {
+    marginTop: space.xs,
+  },
 
-  dailyDoneCard: { borderWidth: 1, borderColor: `${colors.gain}30` },
-  dailyDoneRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
-  doneMark: {
+  // Done state
+  doneCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    backgroundColor: colors.bg2,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: `${colors.gain}20`,
+    padding: SCREEN_PAD,
+  },
+  doneIcon: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: `${colors.gain}18`,
+    backgroundColor: `${colors.gain}14`,
     borderWidth: 1,
-    borderColor: `${colors.gain}40`,
+    borderColor: `${colors.gain}30`,
     alignItems: 'center',
     justifyContent: 'center',
   },
   doneCheck: {
-    fontFamily: 'SpaceGrotesk_700Bold',
-    fontSize: 16,
+    fontFamily: fonts.displayBold,
+    fontSize: 15,
     color: colors.gain,
     lineHeight: 18,
   },
-
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  lastResultHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  resultOutcomePill: {
-    paddingHorizontal: space.sm,
-    paddingVertical: 3,
-    borderRadius: 999,
+  doneTitle: {
+    fontFamily: fonts.uiSemiBold,
+    fontSize: 15,
+    color: colors.gain,
+  },
+  doneSub: {
+    fontFamily: fonts.ui,
+    fontSize: 13,
+    color: colors.muted,
   },
 
-  emptyCard: { alignItems: 'center', gap: space.md, paddingVertical: space.xl },
-  emptyIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: `${colors.brand}18`,
+  // SR row
+  srRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    backgroundColor: colors.bg1,
+    borderRadius: radius.card,
     borderWidth: 1,
-    borderColor: `${colors.brand}30`,
+    borderColor: colors.line,
+    padding: space.lg,
+  },
+  srEyebrow: {
+    fontFamily: fonts.uiMedium,
+    fontSize: 9,
+    letterSpacing: 2,
+    color: colors.muted,
+  },
+  srToNext: {
+    fontFamily: fonts.ui,
+    fontSize: 11,
+    color: colors.muted,
+    opacity: 0.7,
+  },
+  streakBadge: {
+    alignItems: 'center',
+    backgroundColor: colors.bg3,
+    borderRadius: radius.md,
+    paddingVertical: space.sm,
+    paddingHorizontal: space.md,
+    borderWidth: 1,
+    borderColor: colors.lineChampagneSoft,
+    gap: 1,
+    minWidth: 52,
+  },
+  streakNum: {
+    fontFamily: fonts.serifBold,
+    fontSize: 20,
+    color: colors.gold,
+    lineHeight: 24,
+    fontVariant: ['tabular-nums'],
+  },
+  streakLabel: {
+    fontFamily: fonts.ui,
+    fontSize: 9,
+    color: colors.muted,
+    letterSpacing: 0.5,
+  },
+
+  // Sections
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  sectionTitle: {
+    fontFamily: fonts.uiSemiBold,
+    fontSize: 15,
+    color: colors.text,
+  },
+  sectionEyebrow: {
+    fontFamily: fonts.uiMedium,
+    fontSize: 9,
+    letterSpacing: 2,
+    color: colors.muted,
+  },
+
+  // Last round
+  lastCard: {
+    backgroundColor: colors.bg1,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: colors.line,
+    padding: space.lg,
+    gap: space.sm,
+  },
+  lastHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  outcomePill: {
+    paddingHorizontal: space.sm,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+  },
+  outcomePillText: {
+    fontFamily: fonts.uiSemiBold,
+    fontSize: 11,
+    letterSpacing: 0.3,
+  },
+
+  // Empty
+  emptyCard: {
+    alignItems: 'center',
+    gap: space.md,
+    backgroundColor: colors.bg1,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: colors.line,
+    padding: SCREEN_PAD,
+    paddingVertical: space.huge,
+  },
+  emptyIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: `${colors.gold}10`,
+    borderWidth: 1,
+    borderColor: colors.lineChampagneSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  emptyIconText: {
-    fontFamily: 'SpaceGrotesk_700Bold',
-    fontSize: 22,
-    color: colors.brand,
+  emptyIconGlyph: {
+    fontFamily: fonts.displayBold,
+    fontSize: 20,
+    color: colors.gold,
+  },
+  emptyTitle: {
+    fontFamily: fonts.serif,
+    fontSize: 20,
+    color: colors.text,
+    textAlign: 'center',
+    letterSpacing: -0.2,
+  },
+  emptyBody: {
+    fontFamily: fonts.ui,
+    fontSize: 14,
+    color: colors.muted,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 })

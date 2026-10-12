@@ -60,7 +60,7 @@ const SLIDES = [
     step: '01',
     category: 'TRAIN YOUR INSTINCTS',
     headline: 'Read the chart.\nNot the noise.',
-    body: 'Real historical setups. Make the call — buy or skip. The chart plays forward and scores your decision.',
+    body: 'Real historical setups. Go long, short, or skip. The chart plays forward and scores your decision.',
     accent: colors.brand,
   },
   {

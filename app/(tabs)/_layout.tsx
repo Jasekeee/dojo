@@ -1,30 +1,42 @@
 import { Tabs } from 'expo-router'
 import React from 'react'
 import { Platform, StyleSheet, View } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { UiIconSymbol } from '@/components/ui/ui-icon-symbol'
-import { colors, space } from '@/src/ui/theme'
+import { colors, fonts, space } from '@/src/ui/theme'
 import { haptics } from '@/src/ui/haptics'
+
+type IconName = 'bolt.fill' | 'chart.bar.fill' | 'clock.fill' | 'person.fill' | 'gearshape.fill' | 'ladybug.fill'
 
 const HIDDEN = { tabBarItemStyle: { display: 'none' as const } }
 
-type IconName = 'bolt.fill' | 'chart.bar.fill' | 'clock.fill' | 'person.fill' | 'gearshape.fill' | 'ladybug.fill' | 'wallet.pass.fill'
-
 function TabIcon({ name, focused }: { name: IconName; focused: boolean }) {
   return (
-    <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
-      <UiIconSymbol size={22} name={name} color={focused ? colors.brand : colors.muted} />
+    <View style={styles.iconWrap}>
+      <UiIconSymbol
+        size={20}
+        name={name}
+        color={focused ? colors.gold : colors.muted}
+      />
+      {focused && <View style={styles.activeDot} />}
     </View>
   )
 }
 
 export default function TabLayout() {
+  const insets = useSafeAreaInsets()
+
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.brand,
+        tabBarActiveTintColor: colors.gold,
         tabBarInactiveTintColor: colors.muted,
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: [
+          styles.tabBar,
+          // Ensure labels never touch the Android gesture bar
+          { paddingBottom: Math.max(insets.bottom, Platform.OS === 'android' ? 8 : 0) },
+        ],
         tabBarLabelStyle: styles.tabLabel,
         tabBarItemStyle: styles.tabItem,
       }}
@@ -38,27 +50,27 @@ export default function TabLayout() {
         name="train"
         options={{
           title: 'Train',
-          tabBarIcon: ({ focused }) => <TabIcon name={'bolt.fill'} focused={focused} />,
+          tabBarIcon: ({ focused }) => <TabIcon name="bolt.fill" focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="time-machine"
         options={{
-          title: 'Time Machine',
-          tabBarIcon: ({ focused }) => <TabIcon name={'clock.fill'} focused={focused} />,
+          title: 'Archive',
+          tabBarIcon: ({ focused }) => <TabIcon name="clock.fill" focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ focused }) => <TabIcon name={'person.fill'} focused={focused} />,
+          tabBarIcon: ({ focused }) => <TabIcon name="person.fill" focused={focused} />,
         }}
       />
 
-      <Tabs.Screen name="account" options={HIDDEN} />
+      <Tabs.Screen name="account"  options={HIDDEN} />
       <Tabs.Screen name="settings" options={HIDDEN} />
-      <Tabs.Screen name="demo" options={HIDDEN} />
+      <Tabs.Screen name="demo"     options={HIDDEN} />
       <Tabs.Screen name="episodes" options={HIDDEN} />
     </Tabs>
   )
@@ -69,29 +81,24 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg1,
     borderTopWidth: 1,
     borderTopColor: colors.line,
-    height: Platform.OS === 'ios' ? 88 : 68,
+    height: Platform.OS === 'ios' ? 84 : 60,
     paddingTop: space.xs,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.22,
-    shadowRadius: 16,
-    elevation: 16,
   },
   tabLabel: {
+    fontFamily: fonts.uiMedium,
     fontSize: 11,
-    fontWeight: '500',
-    letterSpacing: 0.2,
-    marginBottom: Platform.OS === 'ios' ? 0 : space.xs,
+    letterSpacing: 0.15,
+    marginTop: 1,
   },
   tabItem: { paddingTop: space.xs },
   iconWrap: {
-    width: 44,
-    height: 30,
     alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 15,
+    gap: 3,
   },
-  iconWrapActive: {
-    backgroundColor: `${colors.brand}20`,
+  activeDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.gold,
   },
 })

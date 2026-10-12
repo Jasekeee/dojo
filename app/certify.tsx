@@ -61,7 +61,7 @@ function StepRow({
         done   && { backgroundColor: colors.gain, borderColor: colors.gain },
         active && { borderColor: colors.brand },
       ]}>
-        {done   && <Text style={{ color: '#000', fontSize: 9, fontWeight: '700' }}>✓</Text>}
+        {done   && <Text style={{ color: colors.bg0, fontSize: 9, fontWeight: '700' }}>✓</Text>}
         {active && <View style={stepStyles.pulse} />}
       </View>
       <View style={{ flex: 1 }}>
@@ -230,7 +230,7 @@ export default function CertifyScreen() {
         {/* Header */}
         <Animated.View entering={FadeInDown.duration(350).springify()} style={styles.header}>
           <View style={styles.iconWrap}>
-            <Text style={{ fontSize: 36 }}>⛓️</Text>
+            <Text style={{ fontFamily: 'SpaceGrotesk_700Bold', fontSize: 26, color: colors.brand, letterSpacing: -1 }}>◈</Text>
           </View>
           <Text variant="display" style={{ fontSize: 28, marginTop: space.md }}>
             Certify on Solana
@@ -325,9 +325,11 @@ export default function CertifyScreen() {
         {/* Done */}
         {step === 'done' && certifiedSig && (
           <Animated.View entering={FadeInDown.duration(350).springify()}>
-            <Card variant="accent" style={{ gap: space.md }}>
+            <Card variant="hero" style={{ gap: space.md }}>
               <View style={styles.doneHeader}>
-                <Text style={{ fontSize: 28 }}>✅</Text>
+                <View style={styles.doneIcon}>
+                  <Text style={{ fontFamily: 'SpaceGrotesk_700Bold', fontSize: 16, color: colors.bg0 }}>✓</Text>
+                </View>
                 <View style={{ flex: 1 }}>
                   <Text variant="title" style={{ color: colors.gain }}>Confirmed!</Text>
                   <Text variant="caption" style={{ marginTop: 2 }}>
@@ -439,6 +441,14 @@ const styles = StyleSheet.create({
   feeNote: { color: colors.muted, lineHeight: 16, opacity: 0.65, marginTop: 2 },
 
   doneHeader: { flexDirection: 'row', gap: space.md, alignItems: 'center' },
+  doneIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.gain,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   disclaimer: { textAlign: 'center', color: colors.muted, lineHeight: 18 },
 })

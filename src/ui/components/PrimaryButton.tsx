@@ -1,7 +1,15 @@
+// Champagne gold primary CTA — no neon, no glow, pill shape.
+// Press: scale 0.98 + light haptic. Gradient: warm gold sheen.
+import { LinearGradient } from 'expo-linear-gradient'
 import React from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, type GestureResponderEvent, type ViewStyle } from 'react-native'
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  type GestureResponderEvent,
+  type ViewStyle,
+} from 'react-native'
 import Animated, {
-  interpolateColor,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
@@ -10,7 +18,7 @@ import Animated, {
 import { Text } from '@/src/ui/components/Text'
 import { haptics } from '@/src/ui/haptics'
 import { springs, timings } from '@/src/ui/motion'
-import { colors, radius, space } from '@/src/ui/theme'
+import { colors, fonts, radius, space } from '@/src/ui/theme'
 
 interface ButtonProps {
   label: string
@@ -36,8 +44,8 @@ export function PrimaryButton({
   const pressed = useSharedValue(0)
 
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: withSpring(pressed.value ? 0.96 : 1, springs.snappy) }],
-    opacity: withTiming(disabled || loading ? 0.45 : 1, timings.fast),
+    transform: [{ scale: withSpring(pressed.value ? 0.98 : 1, springs.snappy) }],
+    opacity: withTiming(disabled || loading ? 0.38 : 1, timings.fast),
   }))
 
   const isDisabled = disabled || loading
@@ -49,26 +57,48 @@ export function PrimaryButton({
       onPressOut={() => { pressed.value = 0 }}
       onPress={(e) => {
         if (isDisabled) return
-        haptics.confirm()
+        haptics.select()
         onPress?.(e)
       }}
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ disabled: isDisabled, busy: loading }}
-      style={[styles.base, styles[`size_${size}`], styles[`variant_${variant}`], style, animatedStyle]}
+      style={[styles.base, styles[`size_${size}`], style, animatedStyle]}
     >
+      {/* Gradient fill for primary */}
+      {variant === 'primary' && (
+        <LinearGradient
+          colors={['#D4B47A', '#B8934E', '#C9A96E']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      )}
+      {/* Danger fill */}
+      {variant === 'danger' && (
+        <LinearGradient
+          colors={['#D45E58', '#B03F3A']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      )}
+      {/* Secondary / ghost border overlays */}
+      {variant === 'secondary' && <LinearGradient colors={['transparent','transparent']} style={[StyleSheet.absoluteFillObject, styles.secondaryBg]} />}
+      {variant === 'ghost' && <LinearGradient colors={['transparent','transparent']} style={[StyleSheet.absoluteFillObject, styles.ghostBg]} />}
+
       {loading ? (
-        <ActivityIndicator color={variant === 'primary' ? colors.text : colors.brand} size="small" />
+        <ActivityIndicator
+          color={variant === 'primary' || variant === 'danger' ? colors.bg0 : colors.gold}
+          size="small"
+        />
       ) : (
-        <Text
-          variant="title"
-          style={[
-            styles.label,
-            variant === 'secondary' && { color: colors.brand },
-            variant === 'ghost' && { color: colors.muted },
-            variant === 'danger' && { color: colors.loss },
-          ]}
-        >
+        <Text style={[
+          styles.label,
+          (variant === 'primary' || variant === 'danger') && styles.labelDark,
+          variant === 'secondary' && styles.labelSecondary,
+          variant === 'ghost' && styles.labelGhost,
+        ]}>
           {label}
         </Text>
       )}
@@ -78,35 +108,31 @@ export function PrimaryButton({
 
 const styles = StyleSheet.create({
   base: {
-    borderRadius: radius.card,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  size_lg: { paddingVertical: space.lg, paddingHorizontal: space.xl },
-  size_md: { paddingVertical: space.md, paddingHorizontal: space.lg },
-  variant_primary: {
-    backgroundColor: colors.brand,
-    shadowColor: colors.brand,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  variant_secondary: {
-    backgroundColor: 'transparent',
-    borderWidth: 1.5,
-    borderColor: colors.brand,
-  },
-  variant_ghost: {
-    backgroundColor: colors.bg2,
+  size_lg: { paddingVertical: 15, paddingHorizontal: space.xxl },
+  size_md: { paddingVertical: space.md, paddingHorizontal: space.xl },
+
+  secondaryBg: {
     borderWidth: 1,
-    borderColor: colors.line,
+    borderColor: colors.lineChampagne,
+    borderRadius: radius.pill,
   },
-  variant_danger: {
-    backgroundColor: 'transparent',
-    borderWidth: 1.5,
-    borderColor: colors.loss,
+  ghostBg: {
+    backgroundColor: colors.bg2,
+    borderRadius: radius.pill,
   },
-  label: { color: colors.text },
+
+  label: {
+    fontFamily: fonts.uiSemiBold,
+    fontSize: 15,
+    letterSpacing: 0.2,
+    color: colors.text,
+  },
+  labelDark:      { color: colors.bg0 },
+  labelSecondary: { color: colors.gold },
+  labelGhost:     { color: colors.textSub },
 })

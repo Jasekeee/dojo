@@ -16,6 +16,11 @@ import {
   Inter_700Bold,
 } from '@expo-google-fonts/inter'
 import { SpaceGrotesk_500Medium, SpaceGrotesk_700Bold } from '@expo-google-fonts/space-grotesk'
+import {
+  PlayfairDisplay_400Regular,
+  PlayfairDisplay_500Medium,
+  PlayfairDisplay_700Bold,
+} from '@expo-google-fonts/playfair-display'
 
 SplashScreen.preventAutoHideAsync()
 
@@ -33,6 +38,9 @@ export default function RootLayout() {
     Inter_700Bold,
     SpaceGrotesk_500Medium,
     SpaceGrotesk_700Bold,
+    PlayfairDisplay_400Regular,
+    PlayfairDisplay_500Medium,
+    PlayfairDisplay_700Bold,
   })
 
   const onLayoutRootView = useCallback(async () => {

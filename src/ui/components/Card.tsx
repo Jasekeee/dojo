@@ -1,14 +1,27 @@
+// Matte surface cards — depth via FILL difference, not borders.
+// Hairline borders only (6% white). No colored glows.
 import React from 'react'
 import { StyleSheet, View, type ViewProps } from 'react-native'
 import { colors, radius, space } from '@/src/ui/theme'
 
 interface CardProps extends ViewProps {
-  variant?: 'default' | 'elevated' | 'ghost' | 'accent'
+  variant?: 'default' | 'elevated' | 'ghost' | 'hero'
+  // Hairline champagne top edge for hero elements
+  champagneEdge?: boolean
 }
 
-export function Card({ style, children, variant = 'default', ...rest }: CardProps) {
+export function Card({
+  style,
+  children,
+  variant = 'default',
+  champagneEdge,
+  ...rest
+}: CardProps) {
   return (
     <View style={[styles.base, styles[variant], style]} {...rest}>
+      {(champagneEdge || variant === 'hero') && (
+        <View style={styles.champagneEdge} pointerEvents="none" />
+      )}
       {children}
     </View>
   )
@@ -17,42 +30,51 @@ export function Card({ style, children, variant = 'default', ...rest }: CardProp
 const styles = StyleSheet.create({
   base: {
     borderRadius: radius.card,
-    padding: space.lg,
+    padding: space.xxl,
+    overflow: 'hidden',
   },
+
   default: {
     backgroundColor: colors.bg1,
     borderWidth: 1,
     borderColor: colors.line,
-    // iOS shadow
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    // Android elevation
-    elevation: 3,
   },
+
   elevated: {
-    backgroundColor: colors.bg1,
+    backgroundColor: colors.bg2,
     borderWidth: 1,
     borderColor: colors.line,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.28,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 6,
   },
+
   ghost: {
     backgroundColor: colors.bg2,
-    borderWidth: 0,
-  },
-  accent: {
-    backgroundColor: colors.bg1,
     borderWidth: 1,
-    borderColor: colors.brand,
-    shadowColor: colors.brand,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 4,
+    borderColor: colors.line,
+  },
+
+  // Hero: deepest surface, champagne hairline border
+  hero: {
+    backgroundColor: colors.bg2,
+    borderWidth: 1,
+    borderColor: colors.lineChampagneSoft,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+
+  champagneEdge: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: colors.lineChampagne,
   },
 })

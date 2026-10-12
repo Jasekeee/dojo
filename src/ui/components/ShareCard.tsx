@@ -55,7 +55,7 @@ function ShareCardView({ sr, streakDays, totalRounds }: ShareCardViewProps) {
 
       {/* SR bar */}
       <View style={card.barWrap}>
-        <SRBar sr={sr} showLabels compact style={{ width: '100%' }} />
+        <SRBar sr={sr} compact style={{ width: '100%' }} />
       </View>
 
       {/* Stats row */}

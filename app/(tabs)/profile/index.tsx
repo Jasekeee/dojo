@@ -10,7 +10,7 @@ import { Text } from '@/src/ui/components/Text'
 import { getLevel, type Level } from '@/src/engine/rating'
 import { weakestTags } from '@/src/engine/metrics'
 import { useAppState } from '@/src/state/useAppState'
-import { colors, levelColors, radius, space } from '@/src/ui/theme'
+import { colors, fonts, levelColors, radius, space, SCREEN_PAD } from '@/src/ui/theme'
 import { fadeDown } from '@/src/ui/motion'
 import { LEVEL_BANDS, LevelBand, getLevelBand } from '@/src/ui/levelConfig'
 import { MetricBar, getMetricColor } from '@/src/ui/components/MetricBar'
@@ -35,7 +35,7 @@ function computeProfileMetrics(history: EpisodeResultRecord[]): ProfileMetrics {
     return { winRate: 0, fomoPct: 0, disciplinePct: null, skipQualityPct: null }
   }
 
-  const buys = history.filter((r) => r.action === 'buy')
+  const buys = history.filter((r) => r.action !== 'skip')
   const skips = history.filter((r) => r.action === 'skip')
 
   const winRate = Math.round(
@@ -169,9 +169,16 @@ function HistoryRow({ record }: { record: EpisodeResultRecord }) {
       ? `${colors.loss}18`
       : `${colors.muted}12`
 
-  const actionColor = record.action === 'buy' ? colors.brand : colors.muted
-  const actionBg =
-    record.action === 'buy' ? `${colors.brand}18` : `${colors.muted}12`
+  const actionColor = record.action === 'long'
+    ? colors.gain
+    : record.action === 'short'
+    ? colors.loss
+    : colors.muted
+  const actionBg = record.action === 'long'
+    ? `${colors.gain}18`
+    : record.action === 'short'
+    ? `${colors.loss}18`
+    : `${colors.muted}12`
 
   const tagText = record.tags
     .slice(0, 2)
@@ -196,7 +203,7 @@ function HistoryRow({ record }: { record: EpisodeResultRecord }) {
       <View style={hr.middle}>
         <View style={[hr.actionChip, { backgroundColor: actionBg }]}>
           <Text style={[hr.actionText, { color: actionColor }]}>
-            {record.action.toUpperCase()}
+            {record.action === 'long' ? '↑ L' : record.action === 'short' ? '↓ S' : 'SKIP'}
           </Text>
         </View>
         {tagText ? (
@@ -418,11 +425,7 @@ export default function ProfileScreen() {
               <MetricRow
                 label="Stop Discipline"
                 value={metrics.disciplinePct}
-                desc={
-                  'Rounds where your outcome score stayed above −0.5. ' +
-                  'Higher means fewer deep losses on buy decisions.'
-                }
-                proxyNote="Actual stop-loss placement is not yet stored per round."
+                desc="Rounds without a deep loss. Higher is better."
               />
 
               <View style={styles.metricDivider} />
@@ -430,10 +433,7 @@ export default function ProfileScreen() {
               <MetricRow
                 label="Skip Quality"
                 value={metrics.skipQualityPct}
-                desc={
-                  'SKIPs where the bot would have lost or broken even. ' +
-                  'Recovered from round scores: skip score ≥ 0 means botReturn ≤ 0.'
-                }
+                desc="Skips on charts the bot would have lost. Higher is better."
               />
 
               <View style={styles.metricDivider} />
@@ -441,10 +441,7 @@ export default function ProfileScreen() {
               <MetricRow
                 label="FOMO Rate"
                 value={metrics.fomoPct}
-                desc={
-                  'Buys on pump, fakeout, or breakout patterns. ' +
-                  'Lower is better — these setups historically cost edge.'
-                }
+                desc="Trades on high-risk setups. Lower is better."
                 isLowerBetter
               />
             </Card>
@@ -487,7 +484,9 @@ export default function ProfileScreen() {
         {totalRounds === 0 ? (
           <Animated.View entering={fadeDown(350, 80)}>
             <Card variant="ghost" style={styles.emptyState}>
-              <Text style={{ fontSize: 36 }}>📊</Text>
+              <View style={styles.emptyIcon}>
+                <Text style={styles.emptyIconText}>◆</Text>
+              </View>
               <Text variant="title" style={{ textAlign: 'center', marginTop: space.sm }}>
                 No rounds yet
               </Text>
@@ -535,7 +534,7 @@ export default function ProfileScreen() {
             </Card>
 
             <Text variant="caption" style={styles.historyNote}>
-              Edge = how much you outperformed the bot · range −1.00 to +1.00
+              Showing {recentHistory.length} of {totalRounds} rounds
             </Text>
           </Animated.View>
         ) : null}
@@ -545,7 +544,7 @@ export default function ProfileScreen() {
           <Card style={styles.certifyCard}>
             <View style={styles.certifyHeader}>
               <View style={styles.certifyIconBox}>
-                <Text style={{ fontSize: 20 }}>⛓</Text>
+                <Text style={styles.certifyIconGlyph}>◈</Text>
               </View>
               <View style={{ flex: 1 }}>
                 <Text variant="title">Certify on Solana</Text>
@@ -556,16 +555,11 @@ export default function ProfileScreen() {
             </View>
 
             <Text variant="body" style={{ color: colors.muted, fontSize: 14, marginTop: space.md }}>
-              A Memo transaction links your wallet address to your current Dojo record.
-              Creates a time-stamped on-chain reference — not a score contract or
-              verifiable credential.
+              Links your wallet to your Dojo rating on-chain. Time-stamped reference, not a score contract.
             </Text>
-
-            <View style={styles.certifyNotice}>
-              <Text variant="caption" style={{ color: colors.warn }}>
-                Requires a connected Solana Mobile wallet. Transaction fees apply.
-              </Text>
-            </View>
+            <Text variant="caption" style={{ marginTop: 4 }}>
+              Requires Solana Mobile wallet · standard transaction fee
+            </Text>
 
             <View style={{ marginTop: space.md }}>
               <PrimaryButton
@@ -588,7 +582,7 @@ export default function ProfileScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  content: { padding: space.lg, gap: space.lg, paddingBottom: 100 },
+  content: { padding: SCREEN_PAD, gap: space.lg, paddingBottom: 100 },
 
   // Hero
   hero: {},
@@ -662,6 +656,22 @@ const styles = StyleSheet.create({
     gap: 0,
     paddingVertical: space.xl,
   },
+  emptyIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: `${colors.brand}18`,
+    borderWidth: 1,
+    borderColor: `${colors.brand}30`,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: space.sm,
+  },
+  emptyIconText: {
+    fontFamily: 'SpaceGrotesk_700Bold',
+    fontSize: 22,
+    color: colors.brand,
+  },
 
   // History
   historyHeader: {
@@ -684,15 +694,16 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: `${colors.brand}18`,
+    backgroundColor: `${colors.gold}12`,
+    borderWidth: 1,
+    borderColor: colors.lineChampagneSoft,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  certifyNotice: {
-    marginTop: space.sm,
-    backgroundColor: `${colors.warn}12`,
-    borderRadius: 6,
-    padding: space.sm,
+  certifyIconGlyph: {
+    fontFamily: fonts.displayBold,
+    fontSize: 18,
+    color: colors.gold,
   },
 
   // Global

@@ -23,7 +23,7 @@ interface DisplayRound {
   roundNumber: number
   episodeId: string
   tags: PatternTag[]
-  action: 'buy' | 'skip'
+  action: 'long' | 'short' | 'skip'
   score: number
   userReturn: number | null   // null when reopened (EpisodeResultRecord has no userReturn)
   botReturn: number | null
@@ -233,9 +233,11 @@ export default function DailySummaryScreen() {
           {/* Streak */}
           {streakDays > 0 && (
             <View style={styles.streakBadge}>
-              <Text style={{ fontSize: 14 }}>🔥</Text>
+              <Text variant="label" style={{ color: colors.warn, fontFamily: 'SpaceGrotesk_700Bold', fontSize: 16 }}>
+                {streakDays}
+              </Text>
               <Text variant="label" style={{ color: colors.warn }}>
-                Day {streakDays} streak
+                day streak
               </Text>
             </View>
           )}
@@ -412,12 +414,20 @@ function RoundRow({ round }: { round: DisplayRound }) {
       {/* Action + tags */}
       <View style={rr.middle}>
         <View style={[rr.actionChip, {
-          backgroundColor: round.action === 'buy' ? `${colors.brand}18` : `${colors.muted}12`,
+          backgroundColor: round.action === 'long'
+            ? `${colors.gain}18`
+            : round.action === 'short'
+            ? `${colors.loss}18`
+            : `${colors.muted}12`,
         }]}>
           <Text style={[rr.actionText, {
-            color: round.action === 'buy' ? colors.brand : colors.muted,
+            color: round.action === 'long'
+              ? colors.gain
+              : round.action === 'short'
+              ? colors.loss
+              : colors.muted,
           }]}>
-            {round.action.toUpperCase()}
+            {round.action === 'long' ? '↑ LONG' : round.action === 'short' ? '↓ SHORT' : 'SKIP'}
           </Text>
         </View>
         {tagText ? (
@@ -581,7 +591,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
-    paddingVertical: 10,
+    paddingVertical: space.sm,
   },
   roundNumBadge: {
     width: 28,
@@ -624,7 +634,7 @@ const rr = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
-    paddingVertical: 10,
+    paddingVertical: space.sm,
   },
   numBadge: {
     width: 28,
@@ -648,8 +658,8 @@ const rr = StyleSheet.create({
   },
   actionChip: {
     borderRadius: 4,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
+    paddingHorizontal: space.xs,
+    paddingVertical: space.xs,
   },
   actionText: {
     fontFamily: 'SpaceGrotesk_500Medium',
