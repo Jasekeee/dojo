@@ -87,7 +87,11 @@ export default function RoundScreen() {
   const isInSession  = sessionIndex !== undefined && sessionTotal !== undefined
 
   // ── Derived values ──
-  const entry      = episode.before[episode.before.length - 1]![4]
+  // episode.before guaranteed non-empty by data contract, but guard defensively
+  const lastBefore = episode.before.length > 0
+    ? episode.before[episode.before.length - 1]
+    : undefined
+  const entry      = lastBefore?.[4] ?? 0
   const stopPrice  = decision?.stopPct   !== undefined ? entry * (1 - decision.stopPct)   : undefined
   const targetPrice= decision?.targetPct !== undefined ? entry * (1 + decision.targetPct) : undefined
   const allCandles = [...episode.before, ...episode.after]

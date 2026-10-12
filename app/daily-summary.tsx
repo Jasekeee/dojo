@@ -56,9 +56,12 @@ export default function DailySummaryScreen() {
   const hapticFired = useRef(false)
 
   useEffect(() => {
+    let mounted = true
+
     async function init() {
       // ── 1. Load state BEFORE completing (captures completedResults) ──
       const rawState = await loadState()
+      if (!mounted) return
       const todayISO = dateToISODate(new Date())
 
       // Detect re-open (session already completed for today)
@@ -113,6 +116,7 @@ export default function DailySummaryScreen() {
 
       // ── 5. Complete session (idempotent: won't double-count streak) ──
       const completed = await completeDailySession()
+      if (!mounted) return
       setFinalState(completed)
 
       // ── 6. Haptic — only on first completion, only once ──
@@ -141,6 +145,7 @@ export default function DailySummaryScreen() {
     }
 
     init()
+    return () => { mounted = false }
   }, [])
 
   // ── Derived metrics ──

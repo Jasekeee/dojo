@@ -219,6 +219,12 @@ export function useShareCard(sr: number, streakDays: number, totalRounds: number
     haptics.confirm()
 
     try {
+      if (!ref.current) {
+        Alert.alert('Error', 'Card not ready. Please try again.')
+        setSharing(false)
+        return
+      }
+
       const available = await ExpoSharing.isAvailableAsync()
 
       // Capture the off-screen card view

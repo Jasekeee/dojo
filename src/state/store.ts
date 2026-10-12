@@ -64,7 +64,6 @@ export async function recordRoundResult(result: RoundResult): Promise<AppState> 
   const state = await loadState()
 
   const srAfter = applySrDelta(state.sr, result.score, result.difficulty)
-  const srDelta = srAfter - state.sr
 
   const historyEntry: EpisodeResultRecord = {
     episodeId: result.episodeId,
@@ -81,7 +80,9 @@ export async function recordRoundResult(result: RoundResult): Promise<AppState> 
     currentDaily: state.currentDaily
       ? {
           ...state.currentDaily,
-          completedResults: [...state.currentDaily.completedResults, { ...result, srDelta: Math.round(srDelta) }],
+          // Use result.srDelta (pre-computed in round screen from the same base SR)
+          // to guarantee displayed value matches stored value.
+          completedResults: [...state.currentDaily.completedResults, result],
         }
       : null,
   }

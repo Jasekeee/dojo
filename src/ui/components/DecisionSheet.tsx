@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated'
 import { PrimaryButton } from '@/src/ui/components/PrimaryButton'
@@ -58,6 +58,9 @@ export function DecisionSheet({
   const skipPressed = useSharedValue(0)
   // Guard: prevent double-tap from submitting twice
   const submitting = useRef(false)
+
+  // Reset guard on unmount so remounted sheets work correctly
+  useEffect(() => () => { submitting.current = false }, [])
 
   const skipStyle = useAnimatedStyle(() => ({
     transform: [{ scale: withSpring(skipPressed.value ? 0.95 : 1, springs.snappy) }],
