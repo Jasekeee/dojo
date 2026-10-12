@@ -7,6 +7,12 @@ export class AppConfig {
   static uri = 'https://example.com'
   static clusters: Cluster[] = [
     {
+      id: 'solana:mainnet',
+      name: 'Mainnet',
+      endpoint: clusterApiUrl('mainnet-beta'),
+      network: ClusterNetwork.Mainnet,
+    },
+    {
       id: 'solana:devnet',
       name: 'Devnet',
       endpoint: clusterApiUrl('devnet'),

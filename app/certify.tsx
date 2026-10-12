@@ -100,7 +100,8 @@ interface LiveStats { sr: number; level: string; rounds: number }
 
 export default function CertifyScreen() {
   const router = useRouter()
-  const { connect, account, signAndSendTransactions, connection } = useMobileWallet()
+  const { connect, account, signAndSendTransactions } = useMobileWallet()
+  const mainnetConn = React.useMemo(() => new Connection(RPC_ENDPOINT, 'confirmed'), [])
 
   const [step,       setStep]       = useState<Step>('idle')
   const [txSig,      setTxSig]      = useState<string | null>(null)
@@ -144,7 +145,7 @@ export default function CertifyScreen() {
 
       setStep('preparing')
       const state = await loadState()
-      const conn  = connection ?? new Connection(RPC_ENDPOINT, 'confirmed')
+      const conn  = mainnetConn
 
       const {
         context: { slot: minContextSlot },
