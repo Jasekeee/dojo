@@ -1,0 +1,57 @@
+{
+  "high_fomo": [
+    "{{fomoPct}}% of your entries came right after a big run-up. Those averaged {{fomoAvgReturn}}% — chasing is expensive.",
+    "You bought after strength {{fomoPct}}% of the time. Fast-rising charts are the costliest trap.",
+    "Most of your losses started the same way: chart already up big, then you bought. That's FOMO in action."
+  ],
+  "low_fomo": [
+    "You skipped most of the pump-and-chase traps. That patience is worth real edge.",
+    "Solid discipline on FOMO: you resisted buying into already-running charts.",
+    "You're not chasing. That's harder than it sounds and it shows in your results."
+  ],
+  "high_discipline": [
+    "Every buy had a stop. You know your exits before you enter — that's professional.",
+    "{{disciplinePct}}% stop-set rate. You're treating every trade like a business, not a gamble.",
+    "Clean discipline: stops on all your positions. Risk management first."
+  ],
+  "low_discipline": [
+    "You skipped stops on {{noStopPct}}% of your buys. No stop means no plan — fix that first.",
+    "Buying without a stop is hoping, not trading. Set your exit before you enter.",
+    "{{noStopPct}}% of your entries had no stop. One bad trade without a stop can undo a week of gains."
+  ],
+  "high_selectivity": [
+    "You dodged {{selectivityPct}}% of the traps the bot walked into. Great pattern recognition.",
+    "Selective and right: you skipped losers more often than you skipped winners.",
+    "Your SKIPs are working — you're avoiding bad setups, not just sitting on the sidelines."
+  ],
+  "low_selectivity": [
+    "You're skipping winners as often as losers. Build criteria for when to skip.",
+    "Random SKIPs don't build edge. Try to articulate why you're passing on each setup.",
+    "Your skip rate is high but not selective — you're avoiding risk but also missing opportunity."
+  ],
+  "win_streak": [
+    "Three wins in a row. Your reads are sharp right now — stay consistent.",
+    "You're on a run. Don't change what's working.",
+    "Momentum: your last few rounds have all been positive edge."
+  ],
+  "loss_streak": [
+    "Three rough rounds. Step back and look for the pattern in what went wrong.",
+    "Hard run. The good news: each bad round is data about where your edge breaks down.",
+    "Tough stretch. Check if you've been overtrading — sometimes the right move is SKIP."
+  ],
+  "good_score": [
+    "Strong round. You outpaced the bot — that's the whole point.",
+    "Positive edge over the rule-based bot. That's what a good score means.",
+    "You beat the bot this round. Skill is building."
+  ],
+  "skip_winner": [
+    "You SKIPped that one — it was a winner. Costly skip, but it happens.",
+    "That setup worked and you passed. Not every miss is a mistake, but study what you saw.",
+    "Skipped a winner. Ask yourself what signal you missed or ignored."
+  ],
+  "skip_loser": [
+    "Good skip. The bot bought that and lost — you saw the danger.",
+    "That SKIP just saved you from a losing trade. Selectivity pays.",
+    "Avoided a trap. Your read on that setup was right."
+  ]
+}
