@@ -1,25 +1,228 @@
 import { useRouter } from 'expo-router'
-import React, { useCallback } from 'react'
+import React, { useCallback, useMemo } from 'react'
 import { ScrollView, StyleSheet, View } from 'react-native'
-import Animated, { FadeInDown } from 'react-native-reanimated'
+import Animated from 'react-native-reanimated'
 import { useFocusEffect } from '@react-navigation/native'
 import { Card } from '@/src/ui/components/Card'
 import { PrimaryButton } from '@/src/ui/components/PrimaryButton'
 import { Screen } from '@/src/ui/components/Screen'
 import { Text } from '@/src/ui/components/Text'
-import { getLevel } from '@/src/engine/rating'
-import { computeBehaviourMetrics } from '@/src/engine/insights'
+import { getLevel, type Level } from '@/src/engine/rating'
+import { weakestTags } from '@/src/engine/metrics'
 import { useAppState } from '@/src/state/useAppState'
-import { colors, radius, space } from '@/src/ui/theme'
-import type { RoundResult } from '@/src/state/store'
+import { colors, levelColors, radius, space } from '@/src/ui/theme'
+import { fadeDown } from '@/src/ui/motion'
+import { LEVEL_BANDS, LevelBand, getLevelBand } from '@/src/ui/levelConfig'
+import { MetricBar, getMetricColor } from '@/src/ui/components/MetricBar'
+import { SRBar } from '@/src/ui/components/SRBar'
+import type { EpisodeResultRecord } from '@/src/engine/metrics'
 
-const LEVEL_COLORS: Record<string, string> = {
-  Rookie: colors.muted,
-  Analyst: '#4CC9F0',
-  Trader: colors.brand,
-  Sniper: '#9CFF57',
-  Legend: '#FFB84D',
+// ─── Metrics ──────────────────────────────────────────────────────────────────
+// Computed directly from EpisodeResultRecord[] to avoid casting botReturn=0.
+
+interface ProfileMetrics {
+  winRate: number
+  fomoPct: number
+  disciplinePct: number | null  // null when < 2 buys
+  skipQualityPct: number | null // null when < 2 skips
 }
+
+const FOMO_TAGS = new Set(['pump_dump', 'fakeout', 'breakout'])
+
+function computeProfileMetrics(history: EpisodeResultRecord[]): ProfileMetrics {
+  if (history.length === 0) {
+    return { winRate: 0, fomoPct: 0, disciplinePct: null, skipQualityPct: null }
+  }
+
+  const buys = history.filter((r) => r.action === 'buy')
+  const skips = history.filter((r) => r.action === 'skip')
+
+  const winRate = Math.round(
+    (history.filter((r) => r.score > 0).length / history.length) * 100,
+  )
+
+  const fomoPct =
+    buys.length > 0
+      ? (buys.filter((r) => r.tags.some((t) => FOMO_TAGS.has(t as string))).length /
+          buys.length) *
+        100
+      : 0
+
+  // Proxy: buys where score stayed above −0.5. Direct stop-loss data is not stored
+  // in EpisodeResultRecord — tracked in currentDaily only during active sessions.
+  const disciplinePct =
+    buys.length >= 2
+      ? (buys.filter((r) => r.score > -0.5).length / buys.length) * 100
+      : null
+
+  // Skip score = tanh((0 − botReturn) / 0.15), so score ≥ 0 iff botReturn ≤ 0.
+  // Directly recoverable from EpisodeResultRecord.score without needing botReturn.
+  const skipQualityPct =
+    skips.length >= 2
+      ? (skips.filter((r) => r.score >= 0).length / skips.length) * 100
+      : null
+
+  return { winRate, fomoPct, disciplinePct, skipQualityPct }
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const MONTH_ABBR = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+]
+
+function formatDate(dateISO: string): string {
+  const parts = dateISO.split('-')
+  const m = parseInt(parts[1] ?? '1', 10)
+  const d = parseInt(parts[2] ?? '1', 10)
+  return `${MONTH_ABBR[m - 1] ?? '—'} ${d}`
+}
+
+function formatScore(score: number): string {
+  return (score >= 0 ? '+' : '') + score.toFixed(2)
+}
+
+// ─── StatItem ─────────────────────────────────────────────────────────────────
+
+function StatItem({
+  value,
+  label,
+  valueColor,
+}: {
+  value: string
+  label: string
+  valueColor?: string
+}) {
+  return (
+    <View style={styles.statItem}>
+      <Text variant="numeric" style={{ fontSize: 20, color: valueColor ?? colors.text }}>
+        {value}
+      </Text>
+      <Text variant="caption">{label}</Text>
+    </View>
+  )
+}
+
+// ─── MetricRow ────────────────────────────────────────────────────────────────
+
+function MetricRow({
+  label,
+  value,
+  desc,
+  isLowerBetter = false,
+  proxyNote,
+}: {
+  label: string
+  value: number | null
+  desc: string
+  isLowerBetter?: boolean
+  proxyNote?: string
+}) {
+  if (value === null) {
+    return (
+      <View style={mr.container}>
+        <View style={mr.header}>
+          <Text variant="body" style={mr.name}>{label}</Text>
+          <Text variant="caption">— not enough data</Text>
+        </View>
+        <Text variant="caption" style={mr.desc}>{desc}</Text>
+      </View>
+    )
+  }
+
+  const pct      = Math.max(0, Math.min(100, value))
+  const barColor = getMetricColor(pct, isLowerBetter)
+
+  return (
+    <View style={mr.container}>
+      <View style={mr.header}>
+        <Text variant="body" style={mr.name}>{label}</Text>
+        <Text variant="numeric" style={[mr.value, { color: barColor }]}>
+          {Math.round(pct)}%
+        </Text>
+      </View>
+      <MetricBar value={pct} isLowerBetter={isLowerBetter} />
+      <Text variant="caption" style={mr.desc}>{desc}</Text>
+      {proxyNote ? (
+        <View style={mr.proxyBox}>
+          <Text style={mr.proxyText}>Proxy  ·  {proxyNote}</Text>
+        </View>
+      ) : null}
+    </View>
+  )
+}
+
+// ─── HistoryRow ───────────────────────────────────────────────────────────────
+// Win/loss indicated by letter badge AND color — compliant with accessibility rule.
+
+function HistoryRow({ record }: { record: EpisodeResultRecord }) {
+  const isWin = record.score > 0
+  const isLoss = record.score < 0
+
+  const outcomeLabel = isWin ? 'W' : isLoss ? 'L' : '='
+  const outcomeColor = isWin ? colors.gain : isLoss ? colors.loss : colors.muted
+  const outcomeBg = isWin
+    ? `${colors.gain}18`
+    : isLoss
+      ? `${colors.loss}18`
+      : `${colors.muted}12`
+
+  const actionColor = record.action === 'buy' ? colors.brand : colors.muted
+  const actionBg =
+    record.action === 'buy' ? `${colors.brand}18` : `${colors.muted}12`
+
+  const tagText = record.tags
+    .slice(0, 2)
+    .join(' · ')
+    .replace(/_/g, ' ')
+
+  return (
+    <View style={hr.row}>
+      <View
+        style={[
+          hr.outcomeBadge,
+          { backgroundColor: outcomeBg, borderColor: `${outcomeColor}50` },
+        ]}
+        accessible
+        accessibilityLabel={isWin ? 'Win' : isLoss ? 'Loss' : 'Neutral'}
+      >
+        <Text style={[hr.outcomeText, { color: outcomeColor }]}>
+          {outcomeLabel}
+        </Text>
+      </View>
+
+      <View style={hr.middle}>
+        <View style={[hr.actionChip, { backgroundColor: actionBg }]}>
+          <Text style={[hr.actionText, { color: actionColor }]}>
+            {record.action.toUpperCase()}
+          </Text>
+        </View>
+        {tagText ? (
+          <Text variant="caption" style={hr.tags} numberOfLines={1}>
+            {tagText}
+          </Text>
+        ) : null}
+      </View>
+
+      <Text
+        variant="numeric"
+        style={[
+          hr.score,
+          { color: isWin ? colors.gain : isLoss ? colors.loss : colors.muted },
+        ]}
+      >
+        {formatScore(record.score)}
+      </Text>
+
+      <Text variant="caption" style={hr.date}>
+        {record.dateISO ? formatDate(record.dateISO) : '—'}
+      </Text>
+    </View>
+  )
+}
+
+// ─── ProfileScreen ────────────────────────────────────────────────────────────
 
 export default function ProfileScreen() {
   const router = useRouter()
@@ -28,14 +231,19 @@ export default function ProfileScreen() {
   useFocusEffect(useCallback(() => { refresh() }, [refresh]))
 
   const level = getLevel(state.sr)
-  const levelColor = LEVEL_COLORS[level] ?? colors.brand
+  const { band, nextBand, progress } = getLevelBand(state.sr)
 
-  const historyAsRoundResults = state.history.map((h) => ({
-    ...h, userReturn: 0, botReturn: 0, srDelta: 0, difficulty: 2 as const,
-  })) as RoundResult[]
+  const metrics = useMemo(
+    () => computeProfileMetrics(state.history),
+    [state.history],
+  )
 
-  const metrics = computeBehaviourMetrics(historyAsRoundResults)
+  const weakest = useMemo(() => weakestTags(state.history, 3), [state.history])
+
   const totalRounds = state.history.length
+  const recentHistory = [...state.history].slice(-8).reverse()
+  const srToNext = nextBand ? Math.ceil(nextBand.min - state.sr) : 0
+  const behaviourReady = totalRounds >= 3
 
   if (loading) {
     return (
@@ -49,110 +257,273 @@ export default function ProfileScreen() {
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-
-        {/* SR Hero */}
-        <Animated.View entering={FadeInDown.duration(350).springify()}>
-          <Card variant="elevated" style={styles.srHero}>
-            {/* Level badge top right */}
-            <View style={[styles.levelBadge, { backgroundColor: `${levelColor}18`, borderColor: `${levelColor}40` }]}>
-              <Text variant="caption" style={{ color: levelColor, fontWeight: '700', letterSpacing: 1 }}>
-                {level.toUpperCase()}
-              </Text>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ── SR Hero ── */}
+        <Animated.View entering={fadeDown(350)}>
+          <Card variant="elevated" style={styles.hero}>
+            <View style={styles.heroTop}>
+              <View
+                style={[
+                  styles.levelBadge,
+                  { backgroundColor: `${band.color}18`, borderColor: `${band.color}40` },
+                ]}
+              >
+                <Text style={[styles.levelText, { color: band.color }]}>
+                  {level.toUpperCase()}
+                </Text>
+              </View>
+              {totalRounds > 0 && (
+                <Text variant="caption">
+                  {metrics.winRate}% win rate
+                </Text>
+              )}
             </View>
 
-            <Text variant="numericLarge" style={{ fontSize: 56, marginTop: space.md }}>
+            <Text
+              variant="numericLarge"
+              style={{ fontSize: 68, lineHeight: 72, marginTop: space.md }}
+            >
               {Math.round(state.sr)}
             </Text>
-            <Text variant="caption" style={{ marginTop: 4 }}>SKILL RATING</Text>
+            <Text variant="caption" style={{ letterSpacing: 1.5, marginTop: 2 }}>
+              SKILL RATING
+            </Text>
 
-            {/* SR progress bar */}
-            <View style={styles.srBarWrap}>
-              <View style={styles.srBarTrack}>
-                <View style={[styles.srBarFill, { width: `${(state.sr / 1000) * 100}%` as any, backgroundColor: levelColor }]} />
+            {/* Progress within current level band */}
+            <View style={styles.progressSection}>
+              <SRBar sr={state.sr} />
+              <View style={styles.progressLabels}>
+                <Text variant="caption" style={{ color: `${band.color}AA` }}>
+                  {band.level} · {band.min}
+                </Text>
+                {nextBand ? (
+                  <Text variant="caption">
+                    {srToNext} SR to {nextBand.level}
+                  </Text>
+                ) : (
+                  <Text variant="caption" style={{ color: band.color }}>
+                    Maximum tier
+                  </Text>
+                )}
               </View>
-              <Text variant="caption" style={{ color: levelColor }}>{Math.round(state.sr)} / 1000</Text>
             </View>
 
-            {/* Stats row */}
             <View style={styles.statsRow}>
-              <View style={styles.statItem}>
-                <Text variant="numericLarge" style={{ fontSize: 24 }}>{totalRounds}</Text>
-                <Text variant="caption">rounds</Text>
-              </View>
+              <StatItem value={String(totalRounds)} label="rounds" />
+              {totalRounds > 0 && (
+                <StatItem
+                  value={`${metrics.winRate}%`}
+                  label="vs bot"
+                  valueColor={
+                    metrics.winRate >= 55
+                      ? colors.gain
+                      : metrics.winRate >= 45
+                        ? colors.text
+                        : colors.loss
+                  }
+                />
+              )}
               {state.streakDays > 0 && (
-                <View style={styles.statItem}>
-                  <Text variant="numericLarge" style={{ fontSize: 24, color: colors.warn }}>
-                    🔥 {state.streakDays}
-                  </Text>
-                  <Text variant="caption">day streak</Text>
-                </View>
+                <StatItem
+                  value={`${state.streakDays}d`}
+                  label="streak"
+                  valueColor={colors.warn}
+                />
               )}
             </View>
           </Card>
         </Animated.View>
 
-        {/* Behaviour metrics */}
-        {totalRounds >= 3 && (
-          <Animated.View entering={FadeInDown.duration(350).delay(80).springify()}>
-            <Card style={{ gap: space.lg }}>
-              <Text variant="label" style={{ letterSpacing: 1 }}>BEHAVIOUR</Text>
-              <MetricBar label="Discipline" value={metrics.disciplinePct} desc="Buys with a stop set" />
-              <MetricBar label="Selectivity" value={metrics.selectivityPct} desc="SKIPs that avoided a bot loss" />
-              <MetricBar label="Anti-FOMO" value={100 - metrics.fomoPct} desc="Entries not after a pump" />
+        {/* ── Level Ladder ── */}
+        <Animated.View entering={fadeDown(350, 60)}>
+          <Card style={styles.ladderCard}>
+            <Text variant="label" style={styles.sectionLabel}>LEVEL LADDER</Text>
+            {LEVEL_BANDS.slice().reverse().map((b) => {
+              const isCurrent = b.level === level
+              const isAchieved = state.sr >= b.min
+              return (
+                <View key={b.level} style={styles.ladderRow}>
+                  <View
+                    style={[
+                      styles.ladderDot,
+                      {
+                        backgroundColor: isAchieved ? b.color : 'transparent',
+                        borderColor: isAchieved ? b.color : colors.line,
+                      },
+                    ]}
+                  />
+                  <Text
+                    variant="caption"
+                    style={{
+                      flex: 1,
+                      color: isCurrent ? b.color : isAchieved ? colors.text : colors.muted,
+                      fontWeight: isCurrent ? '700' : '400',
+                      fontSize: isCurrent ? 13 : 12,
+                    }}
+                  >
+                    {b.level}
+                  </Text>
+                  <Text variant="caption" style={{ color: colors.muted }}>
+                    {b.min === 850 ? '850 – 1000' : `${b.min} – ${b.max - 1}`}
+                  </Text>
+                  {isCurrent ? (
+                    <View style={[styles.youChip, { backgroundColor: `${b.color}20` }]}>
+                      <Text style={{ color: b.color, fontSize: 10, fontWeight: '700' }}>
+                        YOU
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              )
+            })}
+          </Card>
+        </Animated.View>
+
+        {/* ── Behaviour Analysis ── */}
+        {behaviourReady ? (
+          <Animated.View entering={fadeDown(350, 120)}>
+            <Card style={styles.metricsCard}>
+              <Text variant="label" style={styles.sectionLabel}>BEHAVIOUR ANALYSIS</Text>
+              <Text variant="caption" style={{ marginBottom: space.lg }}>
+                Based on {totalRounds} round{totalRounds !== 1 ? 's' : ''}.
+                Each metric is a percentage score (0–100).
+              </Text>
+
+              <MetricRow
+                label="Stop Discipline"
+                value={metrics.disciplinePct}
+                desc={
+                  'Rounds where your outcome score stayed above −0.5. ' +
+                  'Higher means fewer deep losses on buy decisions.'
+                }
+                proxyNote="Actual stop-loss placement is not yet stored per round."
+              />
+
+              <View style={styles.metricDivider} />
+
+              <MetricRow
+                label="Skip Quality"
+                value={metrics.skipQualityPct}
+                desc={
+                  'SKIPs where the bot would have lost or broken even. ' +
+                  'Recovered from round scores: skip score ≥ 0 means botReturn ≤ 0.'
+                }
+              />
+
+              <View style={styles.metricDivider} />
+
+              <MetricRow
+                label="FOMO Rate"
+                value={metrics.fomoPct}
+                desc={
+                  'Buys on pump, fakeout, or breakout patterns. ' +
+                  'Lower is better — these setups historically cost edge.'
+                }
+                isLowerBetter
+              />
             </Card>
           </Animated.View>
-        )}
-
-        {/* Empty state */}
-        {totalRounds === 0 && (
-          <Animated.View entering={FadeInDown.duration(350).delay(80).springify()}>
-            <Card variant="ghost" style={{ alignItems: 'center', gap: space.md, paddingVertical: space.xl }}>
-              <Text style={{ fontSize: 40 }}>📊</Text>
-              <Text variant="title" style={{ textAlign: 'center' }}>No rounds yet</Text>
-              <Text variant="body" style={{ color: colors.muted, textAlign: 'center', fontSize: 14 }}>
-                Complete a Daily to see your behaviour metrics.
+        ) : totalRounds > 0 ? (
+          <Animated.View entering={fadeDown(350, 120)}>
+            <Card variant="ghost" style={styles.behaviourPending}>
+              <Text variant="label" style={{ marginBottom: space.xs }}>
+                BEHAVIOUR ANALYSIS
+              </Text>
+              <Text variant="caption">
+                {3 - totalRounds} more round{3 - totalRounds !== 1 ? 's' : ''} needed to unlock.
               </Text>
             </Card>
           </Animated.View>
-        )}
+        ) : null}
 
-        {/* Recent history */}
-        {totalRounds > 0 && (
-          <Animated.View entering={FadeInDown.duration(350).delay(160).springify()} style={{ gap: space.md }}>
-            <Text variant="label" style={{ letterSpacing: 1 }}>RECENT HISTORY</Text>
-            {state.history.slice(-8).reverse().map((r, i) => (
-              <Card key={`${r.episodeId}-${i}`} style={styles.historyRow}>
-                <View style={styles.historyLeft}>
-                  <View style={[
-                    styles.actionBadge,
-                    { backgroundColor: r.action === 'buy' ? `${colors.brand}20` : `${colors.muted}15` }
-                  ]}>
-                    <Text variant="caption" style={{
-                      color: r.action === 'buy' ? colors.brand : colors.muted,
-                      fontWeight: '700', fontSize: 10, letterSpacing: 0.5,
-                    }}>
-                      {r.action.toUpperCase()}
+        {/* ── Weakest Patterns ── */}
+        {weakest.length > 0 && totalRounds >= 5 ? (
+          <Animated.View entering={fadeDown(350, 160)}>
+            <Card style={{ gap: space.sm }}>
+              <Text variant="label" style={styles.sectionLabel}>PATTERNS TO STUDY</Text>
+              <Text variant="caption">
+                Lowest average score across your history (min. 2 appearances each):
+              </Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: 4 }}>
+                {weakest.map((tag) => (
+                  <View key={tag} style={styles.weakTag}>
+                    <Text style={{ color: colors.loss, fontSize: 11, fontWeight: '600' }}>
+                      {tag.replace(/_/g, ' ').toUpperCase()}
                     </Text>
                   </View>
-                  <Text variant="caption">{r.tags.slice(0, 2).join(', ')}</Text>
-                </View>
-                <Text
-                  variant="numeric"
-                  style={{ color: r.score >= 0 ? colors.gain : colors.loss, fontSize: 16 }}
-                >
-                  {r.score >= 0 ? '+' : ''}{(r.score * 100).toFixed(0)}%
-                </Text>
-              </Card>
-            ))}
+                ))}
+              </View>
+            </Card>
           </Animated.View>
-        )}
+        ) : null}
 
-        {/* Certify */}
-        <Animated.View entering={FadeInDown.duration(350).delay(240).springify()}>
-          <Card variant="accent" style={{ gap: space.md }}>
+        {/* ── Empty state ── */}
+        {totalRounds === 0 ? (
+          <Animated.View entering={fadeDown(350, 80)}>
+            <Card variant="ghost" style={styles.emptyState}>
+              <Text style={{ fontSize: 36 }}>📊</Text>
+              <Text variant="title" style={{ textAlign: 'center', marginTop: space.sm }}>
+                No rounds yet
+              </Text>
+              <Text
+                variant="body"
+                style={{ color: colors.muted, textAlign: 'center', fontSize: 14, marginTop: 4 }}
+              >
+                Complete a Daily or Time Machine session to see behaviour metrics and history.
+              </Text>
+            </Card>
+          </Animated.View>
+        ) : null}
+
+        {/* ── Recent History ── */}
+        {recentHistory.length > 0 ? (
+          <Animated.View entering={fadeDown(350, 200)}>
+            <View style={styles.historyHeader}>
+              <Text variant="label" style={styles.sectionLabel}>RECENT ROUNDS</Text>
+              <Text variant="caption">
+                {recentHistory.length} of {totalRounds}
+              </Text>
+            </View>
+
+            <Card style={{ paddingVertical: space.sm, gap: 0 }}>
+              {/* Column labels */}
+              <View style={hr.colHeader}>
+                <View style={{ width: 28 }} />
+                <Text variant="caption" style={{ flex: 1, marginLeft: space.sm }}>
+                  Action · Pattern
+                </Text>
+                <Text variant="caption" style={{ minWidth: 52, textAlign: 'right' }}>
+                  Edge
+                </Text>
+                <Text variant="caption" style={{ minWidth: 48, textAlign: 'right' }}>
+                  Date
+                </Text>
+              </View>
+
+              {recentHistory.map((r, i) => (
+                <View key={`${r.episodeId}-${i}`}>
+                  {i > 0 ? <View style={styles.rowDivider} /> : null}
+                  <HistoryRow record={r} />
+                </View>
+              ))}
+            </Card>
+
+            <Text variant="caption" style={styles.historyNote}>
+              Edge = how much you outperformed the bot · range −1.00 to +1.00
+            </Text>
+          </Animated.View>
+        ) : null}
+
+        {/* ── Certify ── */}
+        <Animated.View entering={fadeDown(350, 260)}>
+          <Card style={styles.certifyCard}>
             <View style={styles.certifyHeader}>
-              <Text style={{ fontSize: 28 }}>⛓️</Text>
+              <View style={styles.certifyIconBox}>
+                <Text style={{ fontSize: 20 }}>⛓</Text>
+              </View>
               <View style={{ flex: 1 }}>
                 <Text variant="title">Certify on Solana</Text>
                 <Text variant="caption" style={{ marginTop: 2 }}>
@@ -160,75 +531,203 @@ export default function ProfileScreen() {
                 </Text>
               </View>
             </View>
-            <Text variant="body" style={{ color: colors.muted, fontSize: 14 }}>
-              A Memo transaction links your wallet to your Dojo record. Verifiable proof of your training.
+
+            <Text variant="body" style={{ color: colors.muted, fontSize: 14, marginTop: space.md }}>
+              A Memo transaction links your wallet address to your current Dojo record.
+              Creates a time-stamped on-chain reference — not a score contract or
+              verifiable credential.
             </Text>
-            <PrimaryButton label="Certify rating →" onPress={() => router.push('/certify' as any)} />
+
+            <View style={styles.certifyNotice}>
+              <Text variant="caption" style={{ color: colors.warn }}>
+                Requires a connected Solana Mobile wallet. Transaction fees apply.
+              </Text>
+            </View>
+
+            <View style={{ marginTop: space.md }}>
+              <PrimaryButton
+                label="Certify rating"
+                onPress={() => router.push('/certify' as any)}
+              />
+            </View>
           </Card>
         </Animated.View>
 
         <Text variant="caption" style={styles.disclaimer}>
-          Educational simulation. Not financial advice.{'\n'}Past performance doesn't predict future results.
+          Educational simulation · Not financial advice{'\n'}
+          Past performance does not predict future results
         </Text>
       </ScrollView>
     </Screen>
   )
 }
 
-function MetricBar({ label, value, desc }: { label: string; value: number; desc: string }) {
-  const pct = Math.max(0, Math.min(100, value))
-  const color = pct >= 70 ? colors.gain : pct >= 40 ? colors.warn : colors.loss
-
-  return (
-    <View style={{ gap: space.xs }}>
-      <View style={mStyles.row}>
-        <Text variant="body" style={{ fontWeight: '600', fontSize: 15 }}>{label}</Text>
-        <Text variant="numeric" style={{ color, fontSize: 17 }}>{Math.round(pct)}%</Text>
-      </View>
-      <View style={mStyles.track}>
-        <View style={[mStyles.fill, { width: `${pct}%` as any, backgroundColor: color }]} />
-      </View>
-      <Text variant="caption" style={{ fontSize: 12 }}>{desc}</Text>
-    </View>
-  )
-}
-
-const mStyles = StyleSheet.create({
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  track: { height: 6, backgroundColor: colors.bg2, borderRadius: 3, overflow: 'hidden' },
-  fill: { height: 6, borderRadius: 3 },
-})
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   content: { padding: space.lg, gap: space.lg, paddingBottom: 100 },
 
-  srHero: { gap: space.sm },
+  // Hero
+  hero: {},
+  heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   levelBadge: {
-    alignSelf: 'flex-start',
     borderRadius: radius.chip,
     paddingVertical: 4,
     paddingHorizontal: space.md,
     borderWidth: 1,
   },
-  srBarWrap: { gap: 6, marginTop: space.sm },
-  srBarTrack: { height: 6, backgroundColor: colors.bg2, borderRadius: 3, overflow: 'hidden' },
-  srBarFill: { height: 6, borderRadius: 3 },
-  statsRow: { flexDirection: 'row', gap: space.xl, marginTop: space.sm },
+  levelText: {
+    fontFamily: 'SpaceGrotesk_700Bold',
+    fontSize: 11,
+    letterSpacing: 1.8,
+  },
+  progressSection: { marginTop: space.md, gap: space.xs },
+  progressLabels: { flexDirection: 'row', justifyContent: 'space-between' },
+  statsRow: { flexDirection: 'row', gap: space.xl, marginTop: space.md },
   statItem: { gap: 2 },
 
-  historyRow: {
+  // Level ladder
+  ladderCard: { paddingVertical: space.md },
+  ladderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    paddingVertical: 7,
+  },
+  ladderDot: { width: 8, height: 8, borderRadius: 4, borderWidth: 1.5 },
+  youChip: { borderRadius: 4, paddingHorizontal: 5, paddingVertical: 2 },
+
+  // Metrics
+  metricsCard: {},
+  metricDivider: { height: 1, backgroundColor: colors.line, marginVertical: space.lg },
+  behaviourPending: {
+    paddingVertical: space.lg,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: 16,
+  },
+
+  // Weak tags
+  weakTag: {
+    backgroundColor: `${colors.loss}14`,
+    borderRadius: 4,
+    paddingHorizontal: space.sm,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: `${colors.loss}30`,
+  },
+
+  // Empty state
+  emptyState: {
+    alignItems: 'center',
+    gap: 0,
+    paddingVertical: space.xl,
+  },
+
+  // History
+  historyHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: space.sm,
+    marginBottom: space.sm,
   },
-  historyLeft: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  actionBadge: {
-    borderRadius: radius.chip,
-    paddingVertical: 3,
-    paddingHorizontal: space.sm,
+  rowDivider: { height: 1, backgroundColor: `${colors.line}60` },
+  historyNote: { textAlign: 'center', marginTop: space.xs },
+
+  // Certify
+  certifyCard: {
+    borderWidth: 1,
+    borderColor: `${colors.brand}35`,
+    backgroundColor: colors.bg1,
+  },
+  certifyHeader: { flexDirection: 'row', gap: space.md, alignItems: 'center' },
+  certifyIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: `${colors.brand}18`,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  certifyNotice: {
+    marginTop: space.sm,
+    backgroundColor: `${colors.warn}12`,
+    borderRadius: 6,
+    padding: space.sm,
   },
 
-  certifyHeader: { flexDirection: 'row', gap: space.md, alignItems: 'center' },
-  disclaimer: { textAlign: 'center', marginTop: space.md },
+  // Global
+  sectionLabel: { letterSpacing: 1, marginBottom: space.sm },
+  disclaimer: { textAlign: 'center', lineHeight: 18 },
+})
+
+const mr = StyleSheet.create({
+  container: { gap: space.xs },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  name: { fontWeight: '600', fontSize: 15 },
+  value: { fontSize: 16 },
+  desc: { fontSize: 12, lineHeight: 17 },
+  proxyBox: {
+    backgroundColor: `${colors.warn}12`,
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    alignSelf: 'flex-start',
+    marginTop: 4,
+  },
+  proxyText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    color: colors.warn,
+  },
+})
+
+const hr = StyleSheet.create({
+  colHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+    marginBottom: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.line,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    paddingVertical: 9,
+  },
+  outcomeBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  outcomeText: {
+    fontFamily: 'SpaceGrotesk_700Bold',
+    fontSize: 12,
+    lineHeight: 14,
+  },
+  middle: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.xs,
+    overflow: 'hidden',
+  },
+  actionChip: {
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  actionText: {
+    fontFamily: 'SpaceGrotesk_500Medium',
+    fontSize: 10,
+    letterSpacing: 0.5,
+  },
+  tags: { flex: 1, fontSize: 11 },
+  score: { fontSize: 14, minWidth: 52, textAlign: 'right' },
+  date: { minWidth: 48, textAlign: 'right', fontSize: 11 },
 })

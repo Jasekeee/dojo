@@ -1,10 +1,9 @@
 import React from 'react'
-import { type GestureResponderEvent, StyleSheet } from 'react-native'
-import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated'
-import { Pressable } from 'react-native'
+import { Pressable, StyleSheet, type GestureResponderEvent } from 'react-native'
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated'
 import { Text } from '@/src/ui/components/Text'
 import { haptics } from '@/src/ui/haptics'
-import { springs, timings } from '@/src/ui/motion'
+import { springs } from '@/src/ui/motion'
 import { colors, radius, space } from '@/src/ui/theme'
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable)
@@ -13,10 +12,12 @@ export function Chip({
   label,
   selected,
   onPress,
+  size = 'md',
 }: {
   label: string
   selected?: boolean
   onPress?: (e: GestureResponderEvent) => void
+  size?: 'sm' | 'md'
 }) {
   const pressed = useSharedValue(0)
 
@@ -32,12 +33,20 @@ export function Chip({
         haptics.select()
         onPress?.(e)
       }}
-      style={[styles.chip, selected && styles.chipSelected, animatedStyle]}
+      accessibilityRole="button"
+      accessibilityState={{ selected: !!selected }}
+      style={[
+        styles.base,
+        size === 'sm' ? styles.sm : styles.md,
+        selected && styles.selected,
+        animatedStyle,
+      ]}
     >
       <Text
         variant="label"
         style={[
           styles.label,
+          size === 'sm' && { fontSize: 11 },
           selected && styles.labelSelected,
         ]}
       >
@@ -48,15 +57,18 @@ export function Chip({
 }
 
 const styles = StyleSheet.create({
-  chip: {
-    paddingHorizontal: space.md,
-    paddingVertical: space.sm,
+  base: {
     borderRadius: radius.chip,
     backgroundColor: colors.bg2,
     borderWidth: 1,
     borderColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 32,
   },
-  chipSelected: {
+  md:  { paddingHorizontal: space.md, paddingVertical: space.sm },
+  sm:  { paddingHorizontal: space.sm, paddingVertical: 4 },
+  selected: {
     backgroundColor: `${colors.brand}22`,
     borderColor: colors.brand,
   },

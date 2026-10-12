@@ -1,5 +1,6 @@
 // Design tokens. SPEC.md section 7. Screens/components must read from here — no hard-coded
 // colors or spacing. Dark, premium, fintech-meets-game mood with one electric accent.
+import type { Level } from '@/src/engine/rating'
 
 export const colors = {
   bg0: '#0A0B0F',
@@ -50,6 +51,25 @@ export const fontSize = {
   xl: 24,
   xxl: 32,
   xxxl: 40,
+} as const
+
+// Level progression colors — single source of truth across all screens
+// Uses Level type from engine (type-only import — no runtime dep on bundle size)
+export const levelColors: Record<Level, string> = {
+  Rookie:  colors.muted,    // '#8A91A3'
+  Analyst: '#4CC9F0',
+  Trader:  colors.brand,    // '#8B5CFF'
+  Sniper:  colors.gain,     // '#9CFF57'
+  Legend:  colors.warn,     // '#FFB84D'
+}
+
+// Semantic icon sizes — minimum 44pt for touch targets (WCAG)
+export const iconSize = {
+  xs:  20,
+  sm:  32,
+  md:  44,
+  lg:  56,
+  xl:  72,
 } as const
 
 export type Colors = typeof colors
