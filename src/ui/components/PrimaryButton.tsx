@@ -1,5 +1,5 @@
 import React from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, type GestureResponderEvent } from 'react-native'
+import { ActivityIndicator, Pressable, StyleSheet, type GestureResponderEvent, type ViewStyle } from 'react-native'
 import Animated, {
   interpolateColor,
   useAnimatedStyle,
@@ -19,6 +19,7 @@ interface ButtonProps {
   loading?: boolean
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger'
   size?: 'md' | 'lg'
+  style?: ViewStyle
 }
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable)
@@ -30,6 +31,7 @@ export function PrimaryButton({
   loading,
   variant = 'primary',
   size = 'lg',
+  style,
 }: ButtonProps) {
   const pressed = useSharedValue(0)
 
@@ -53,7 +55,7 @@ export function PrimaryButton({
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ disabled: isDisabled, busy: loading }}
-      style={[styles.base, styles[`size_${size}`], styles[`variant_${variant}`], animatedStyle]}
+      style={[styles.base, styles[`size_${size}`], styles[`variant_${variant}`], style, animatedStyle]}
     >
       {loading ? (
         <ActivityIndicator color={variant === 'primary' ? colors.text : colors.brand} size="small" />

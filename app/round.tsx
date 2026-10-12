@@ -502,25 +502,6 @@ export default function RoundScreen() {
                 ))}
               </View>
 
-              {/* Edge explanation */}
-              {savedResult.action === 'buy' && (
-                <View style={styles.edgeRow}>
-                  <Text variant="caption">
-                    Edge score
-                  </Text>
-                  <Text
-                    variant="numeric"
-                    style={{
-                      fontSize: 14,
-                      color: savedResult.score >= 0 ? colors.gain : colors.loss,
-                    }}
-                  >
-                    {savedResult.score >= 0 ? '+' : ''}
-                    {savedResult.score.toFixed(2)}
-                  </Text>
-                </View>
-              )}
-
               {/* Tags */}
               <View style={styles.tagRow}>
                 {episode.tags.map((t) => (
@@ -751,14 +732,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.line,
     backgroundColor: colors.bg1,
-  },
-  edgeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: colors.bg2,
-    borderRadius: 8,
-    padding: space.sm,
   },
   tagRow: {
     flexDirection: 'row',
