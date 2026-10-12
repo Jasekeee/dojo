@@ -71,7 +71,10 @@ function RootNavigator() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="onboarding" options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />
       <Stack.Screen name="round" options={{ presentation: 'fullScreenModal' }} />
+      <Stack.Screen name="daily-summary" options={{ presentation: 'fullScreenModal' }} />
+      <Stack.Screen name="certify" options={{ presentation: 'modal' }} />
       <Stack.Screen name="sign-in" />
       <Stack.Screen name="+not-found" />
     </Stack>

@@ -1,0 +1,58 @@
+[
+  {
+    "id": "ftx_collapse_2022",
+    "title": "FTX Collapse",
+    "subtitle": "Nov 2022 — A major crypto exchange freezes withdrawals",
+    "period": "November 2022",
+    "episodeIds": [
+      "ftx_1",
+      "ftx_2",
+      "ftx_3"
+    ],
+    "summaryTemplate": "You navigated the FTX collapse: {result} vs holding {hold}"
+  },
+  {
+    "id": "luna_crash_2022",
+    "title": "LUNA Crash",
+    "subtitle": "May 2022 — A top-10 stablecoin loses its peg",
+    "period": "May 2022",
+    "episodeIds": [
+      "luna_1",
+      "luna_2"
+    ],
+    "summaryTemplate": "You traded the LUNA collapse: {result} vs holding {hold}"
+  },
+  {
+    "id": "aug_flush_2024",
+    "title": "August 2024 Flush",
+    "subtitle": "Global risk-off sells crypto alongside equities",
+    "period": "August 2024",
+    "episodeIds": [
+      "aug24_1",
+      "aug24_2"
+    ],
+    "summaryTemplate": "You survived the August flush: {result} vs holding {hold}"
+  },
+  {
+    "id": "tariff_shock_2025",
+    "title": "Tariff Shock",
+    "subtitle": "Apr 2025 — Trade war escalation hits risk assets",
+    "period": "April 2025",
+    "episodeIds": [
+      "tariff_1",
+      "tariff_2"
+    ],
+    "summaryTemplate": "You navigated the tariff shock: {result} vs holding {hold}"
+  },
+  {
+    "id": "liquidation_cascade_2025",
+    "title": "October 2025 Cascade",
+    "subtitle": "Oct 2025 — Leveraged longs liquidated across crypto",
+    "period": "October 2025",
+    "episodeIds": [
+      "liq25_1",
+      "liq25_2"
+    ],
+    "summaryTemplate": "You traded the Oct 2025 cascade: {result} vs holding {hold}"
+  }
+]
