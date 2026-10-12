@@ -1,0 +1,15 @@
+{
+  "name": "Dojo Trader",
+  "symbol": "DOJO",
+  "description": "Earned in Dojo. Trader level — 500 SR, consistently beating the bot. Self-reported, not a verified credential.",
+  "image": "https://raw.githubusercontent.com/Jasekeee/dojo/main/sbt/metadata/Trader.png",
+  "attributes": [
+    { "trait_type": "Level", "value": "Trader" },
+    { "trait_type": "Min SR", "value": "500" },
+    { "trait_type": "Rank", "value": "III" }
+  ],
+  "properties": {
+    "files": [{ "uri": "https://raw.githubusercontent.com/Jasekeee/dojo/main/sbt/metadata/Trader.png", "type": "image/png" }],
+    "category": "image"
+  }
+}

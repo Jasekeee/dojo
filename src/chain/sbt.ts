@@ -8,6 +8,8 @@
  *        → mint keypair partially signs, wallet signs as fee payer
  *   Tx2: initTokenMetadata + updateField×3 + createATA + mintTo + revokeAuthority
  *        → wallet signs only (wallet = mint authority = update authority)
+ *
+ * Cluster: mainnet-beta (Token-2022 program live on mainnet).
  */
 import {
   Connection,
@@ -35,9 +37,9 @@ import {
   createUpdateFieldInstruction,
 } from '@solana/spl-token-metadata'
 
-// ── Cluster config — devnet until Jake's explicit mainnet YES ─────────────────
-export const SBT_RPC     = 'https://api.devnet.solana.com'
-export const SBT_CLUSTER = 'devnet' as const
+// ── Cluster config ────────────────────────────────────────────────────────────
+export const SBT_RPC     = 'https://api.mainnet-beta.solana.com'
+export const SBT_CLUSTER = 'mainnet-beta' as const
 
 export function sbtExplorerUrl(sig: string): string {
   return `https://explorer.solana.com/tx/${sig}?cluster=${SBT_CLUSTER}`
@@ -115,6 +117,56 @@ export function estimateMetadataBytes(level: SbtLevel, srAtMint: number): number
   return total + 32 // generous padding for TLV framing
 }
 
+// ── Retry helper ─────────────────────────────────────────────────────────────
+
+/** Retries an async call up to maxAttempts with exponential backoff. Handles 429 and timeouts. */
+export async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxAttempts = 3,
+  baseDelayMs = 800,
+): Promise<T> {
+  let lastErr: unknown
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      return await fn()
+    } catch (err: any) {
+      lastErr = err
+      const msg: string = err?.message ?? ''
+      const isRetryable =
+        msg.includes('429') ||
+        msg.includes('Too Many Requests') ||
+        msg.includes('timeout') ||
+        msg.includes('timed out') ||
+        msg.includes('ECONNRESET') ||
+        msg.includes('socket hang up') ||
+        msg.includes('fetch failed')
+      if (!isRetryable || attempt === maxAttempts - 1) throw err
+      await new Promise((r) => setTimeout(r, baseDelayMs * 2 ** attempt))
+    }
+  }
+  throw lastErr
+}
+
+// ── Rent estimation ───────────────────────────────────────────────────────────
+
+/** Fetch real mainnet rent for the mint account size. ATA rent is fixed (165 bytes). */
+export async function estimateRealLamports(
+  connection: Connection,
+  level: SbtLevel,
+  srAtMint: number,
+): Promise<{ mintLamports: number; ataLamports: number; totalLamports: number }> {
+  const baseLen   = getMintLen([ExtensionType.NonTransferable, ExtensionType.MetadataPointer])
+  const metaBytes = estimateMetadataBytes(level, srAtMint)
+  const totalLen  = baseLen + 8 + metaBytes
+
+  const [mintLamports, ataLamports] = await Promise.all([
+    withRetry(() => connection.getMinimumBalanceForRentExemption(totalLen)),
+    withRetry(() => connection.getMinimumBalanceForRentExemption(165)),
+  ])
+
+  return { mintLamports, ataLamports, totalLamports: mintLamports + ataLamports }
+}
+
 // ── Duplicate check ───────────────────────────────────────────────────────────
 
 /** Check on-chain: scan wallet's Token-2022 accounts for a Dojo badge of this level. */
@@ -124,15 +176,19 @@ export async function findExistingBadge(
   level: SbtLevel,
 ): Promise<string | null> {
   try {
-    const accounts = await connection.getParsedTokenAccountsByOwner(
-      walletPublicKey,
-      { programId: TOKEN_2022_PROGRAM_ID },
+    const accounts = await withRetry(() =>
+      connection.getParsedTokenAccountsByOwner(
+        walletPublicKey,
+        { programId: TOKEN_2022_PROGRAM_ID },
+      )
     )
     for (const { account } of accounts.value) {
       const mintStr: string | undefined = account.data.parsed?.info?.mint
       if (!mintStr) continue
       try {
-        const meta = await getTokenMetadata(connection, new PublicKey(mintStr))
+        const meta = await withRetry(() =>
+          getTokenMetadata(connection, new PublicKey(mintStr))
+        )
         if (!meta) continue
         if (meta.symbol !== SBT_SYMBOL) continue
         const levelField = meta.additionalMetadata.find(([k]) => k === 'level')
@@ -176,10 +232,10 @@ export async function buildSbtTransactions(
   const metaBytes   = estimateMetadataBytes(level, srAtMint)
   // +8 for TokenMetadata TLV type+length header
   const totalLen    = baseLen + 8 + metaBytes
-  const lamports    = await connection.getMinimumBalanceForRentExemption(totalLen)
+  const lamports    = await withRetry(() => connection.getMinimumBalanceForRentExemption(totalLen))
 
-  const { blockhash: bh1 } = await connection.getLatestBlockhash()
-  const { blockhash: bh2 } = await connection.getLatestBlockhash()
+  const { blockhash: bh1 } = await withRetry(() => connection.getLatestBlockhash())
+  const { blockhash: bh2 } = await withRetry(() => connection.getLatestBlockhash())
 
   const mintedAt = Math.floor(Date.now() / 1000)
   const name     = sbtName(level)

@@ -12,7 +12,7 @@ Built for the **CLOCK IN — Solana Mobile × Radiants** hackathon.
 
 - **Daily Training** — 10 real historical charts per day, ~3 minutes. Make BUY or SKIP decisions, see what happened next, get scored against a disciplined bot baseline.
 - **Time Machine** — "It's Nov 2022. A major exchange just froze withdrawals. Here's the SOL chart. What do you do?" Play through 5 real market crashes with factual headlines. No hindsight in the prompts.
-- **Skill Rating (SR)** — 0–1000, starts at 500. Beats the bot → SR goes up. Skipping losers also scores positively. Certify your SR on Solana via a Memo transaction.
+- **Skill Rating (SR)** — 0–1000, starts at 500. Beats the bot → SR goes up. Skipping losers also scores positively. Mint a soulbound Level Badge on Solana when you hit a new tier.
 - **Behaviour metrics** — FOMO index, discipline (stops set %), selectivity. Template-driven insights after each session.
 
 **What it is NOT:** financial advice, a trading signal service, real-money gambling, or a custody product.
@@ -30,8 +30,8 @@ Built for the **CLOCK IN — Solana Mobile × Radiants** hackathon.
 | Reveal | Chart draws forward, entry/stop/target lines, PnL counter |
 | Result | Score, SR delta, vs bot vs hold, 1–2 insight sentences |
 | Time Machine | 5 campaign cards; context headline; checkpoint sequence |
-| Profile | SR, level, discipline/selectivity/anti-FOMO bars, history |
-| Certify | Connect Phantom/Solflare via MWA, sign Memo tx, Explorer link |
+| Profile | SR, level, discipline/selectivity/anti-FOMO bars, history, Level Badges |
+| Mint Badge | Review cost, sign 2 txs via MWA, soulbound Token-2022 badge on mainnet |
 
 ---
 
@@ -42,7 +42,8 @@ src/engine/     pure TypeScript — sim, rating, score, picker, metrics, streak,
 src/content/    episodes.json (835 daily episodes), campaigns.json (5 Time Machine campaigns)
 src/ui/         theme tokens, components (Chart, DecisionSheet, Card…), haptics, sound
 src/state/      AsyncStorage persistence — SR, streak, history, daily session
-src/chain/      MWA certify (memo tx), SGT badge check
+src/chain/      Token-2022 SBT (sbt.ts), SGT badge check (sgt.ts)
+sbt/metadata/   5 badge JSON + PNG files — hosted on GitHub raw CDN
 pipeline/       Node scripts — fetch Binance/GeckoTerminal, slice, label, baselines, export
 ```
 
@@ -53,8 +54,8 @@ Zero backend. Offline-first. No API keys at runtime. No LLM.
 ## Solana Mobile integration
 
 - **MWA** — wallet connect + sign via `@wallet-ui/react-native-web3js` (official Solana Foundation template)
-- **Certify** — builds a `TransactionMessage` with a Memo instruction (SPL Memo program), signs via MWA, confirms, shows Explorer link
-- **SGT badge** — reads token accounts via public RPC; shows "Verified Seeker" badge if holder (zero-balance burned tokens ignored)
+- **Level Badges** — Token-2022 NonTransferable soulbound tokens on **mainnet-beta**. 5 levels: Rookie / Analyst / Trader / Sniper / Legend. Each badge embeds `level`, `sr_at_mint`, `minted_at` on-chain via TokenMetadata extension. Two-transaction flow (extension ordering requires split). One badge per level per wallet. ~0.004–0.006 SOL rent per badge.
+- **SGT badge** — reads token accounts via public RPC; shows "Verified Seeker" badge if holder (zero-balance burned tokens ignored) — _planned, mint address pending verification from Solana Mobile docs_
 
 ---
 

@@ -245,7 +245,7 @@ export default function DailySummaryScreen() {
           {/* Re-open notice */}
           {isReopen && (
             <Text variant="caption" style={styles.reopenNote}>
-              Session results loaded from today's history.
+              Session results loaded from today{"'"}s history.
             </Text>
           )}
         </Animated.View>

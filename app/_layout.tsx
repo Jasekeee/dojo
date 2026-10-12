@@ -74,7 +74,7 @@ export default function RootLayout() {
 }
 
 function RootNavigator() {
-  // Wallet connection is opt-in (Certify, Account tab) — never gates the training loop.
+  // Wallet connection is opt-in (Level Badges, Account tab) — never gates the training loop.
   // SPEC.md P0: "Fresh install -> first episode playable in < 30s, no wallet required."
   return (
     <Stack screenOptions={{ headerShown: false }}>
@@ -82,7 +82,7 @@ function RootNavigator() {
       <Stack.Screen name="onboarding" options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />
       <Stack.Screen name="round" options={{ presentation: 'fullScreenModal' }} />
       <Stack.Screen name="daily-summary" options={{ presentation: 'fullScreenModal' }} />
-      <Stack.Screen name="certify" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="sbt-mint" options={{ presentation: 'modal' }} />
       <Stack.Screen name="sign-in" />
       <Stack.Screen name="+not-found" />
     </Stack>

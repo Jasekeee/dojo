@@ -608,7 +608,7 @@ export default function OnboardingScreen() {
           >
             <Text style={styles.disclaimerText}>
               Educational simulation. Not financial advice.{'\n'}
-              Past performance doesn't predict future results.
+              Past performance does not predict future results.
             </Text>
           </Animated.View>
         )}

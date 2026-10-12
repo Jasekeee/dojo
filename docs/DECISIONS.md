@@ -44,10 +44,19 @@ Chosen via `npm create solana-dapp@latest` → template `gh:solana-foundation/te
   - Oct 2025 Cascade: SOLUSDT 1h, Sep 20 – Nov 1 2025 (1009 candles). Entry $223.14 and $180.96.
 - All data cached in `data/raw/campaign_*.json`. All facts verified from downloaded Binance candles; no numbers invented.
 
-## 2026-10-12 — Certify: devnet for development, mainnet decision deferred to Phase 8 freeze
-- SPEC.md section 8.2: cluster is config-driven. Using devnet during development (free SOL, no real cost).
-- Mainnet switch decision to be made at freeze with Jake (tiny fee ~0.001 SOL per certification).
-- SPL Memo program ID `MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr` — from Solana docs, not memorized.
+## 2026-10-12 — Removed Memo Certify; Level Badges (SBT) are the only on-chain feature
+- Memo certify (SPL Memo, write SR as a signed memo tx) was removed. It was self-signed with no on-chain verifiability — provided no additional value over the Level Badge which contains the same data permanently in token metadata.
+- Level Badges (Token-2022 NonTransferable + MetadataPointer + TokenMetadata) are now the sole on-chain feature. They embed `level`, `sr_at_mint`, `minted_at` as additional metadata fields. One badge per level per wallet.
+- Deleted: `app/certify.tsx`, all certify-related UI in Profile, `Stack.Screen name="certify"` in `_layout.tsx`.
+
+## 2026-10-12 — Level Badges: mainnet-beta
+- Switched from devnet to mainnet-beta (`https://api.mainnet-beta.solana.com`).
+- Token-2022 program is live on mainnet. NonTransferable + MetadataPointer + TokenMetadata extensions confirmed available.
+- Estimated cost per badge: ~0.004–0.006 SOL in rent (two accounts: Token-2022 mint ~270–350 bytes + ATA 165 bytes). Rent is recoverable in principle if badge closed later.
+- Explorer links use mainnet (no `?cluster=` suffix needed; mainnet is default).
+- Retry logic added: up to 3 attempts with exponential backoff for 429 / timeout / socket errors.
+- Network mismatch (wallet on devnet/testnet): error message "Switch your wallet to Mainnet".
+- Metadata + image URLs: `raw.githubusercontent.com/Jasekeee/dojo/main/sbt/metadata/<Level>.{json,png}` — 5 JSON + 5 PNG files committed to repo alongside this decision.
 
 ## 2026-10-11 — Skia confirmed working; vitest for engine tests
 - SPEC.md section 9 marked `@shopify/react-native-skia` [VERIFY works in the scaffold's dev build]. Installed `@shopify/react-native-skia` (2.14.0) + ran a native rebuild (`expo run:android`): CMake compiled its native libs for arm64-v8a without issue, app installed and the chart rendered correctly on the Seeker. Confirmed working — used for `src/chart/CandleChart.tsx`.

@@ -1,0 +1,15 @@
+{
+  "name": "Dojo Sniper",
+  "symbol": "DOJO",
+  "description": "Earned in Dojo. Sniper level — 700 SR, precise entries and disciplined exits. Self-reported, not a verified credential.",
+  "image": "https://raw.githubusercontent.com/Jasekeee/dojo/main/sbt/metadata/Sniper.png",
+  "attributes": [
+    { "trait_type": "Level", "value": "Sniper" },
+    { "trait_type": "Min SR", "value": "700" },
+    { "trait_type": "Rank", "value": "IV" }
+  ],
+  "properties": {
+    "files": [{ "uri": "https://raw.githubusercontent.com/Jasekeee/dojo/main/sbt/metadata/Sniper.png", "type": "image/png" }],
+    "category": "image"
+  }
+}

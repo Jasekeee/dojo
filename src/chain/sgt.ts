@@ -8,7 +8,7 @@ import { Connection, PublicKey } from '@solana/web3.js'
 // Placeholder: replace with the official SGT mint once verified.
 const SGT_MINT_PLACEHOLDER = 'VERIFY_SGT_MINT_FROM_SOLANA_MOBILE_DOCS'
 
-const RPC_ENDPOINT = 'https://api.devnet.solana.com'
+const RPC_ENDPOINT = 'https://api.mainnet-beta.solana.com'
 
 export async function hasSeekerGenesisToken(walletAddress: string): Promise<boolean> {
   if (SGT_MINT_PLACEHOLDER.startsWith('VERIFY')) {

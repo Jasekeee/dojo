@@ -1,0 +1,15 @@
+{
+  "name": "Dojo Analyst",
+  "symbol": "DOJO",
+  "description": "Earned in Dojo. Analyst level — 300 SR, pattern recognition taking shape. Self-reported, not a verified credential.",
+  "image": "https://raw.githubusercontent.com/Jasekeee/dojo/main/sbt/metadata/Analyst.png",
+  "attributes": [
+    { "trait_type": "Level", "value": "Analyst" },
+    { "trait_type": "Min SR", "value": "300" },
+    { "trait_type": "Rank", "value": "II" }
+  ],
+  "properties": {
+    "files": [{ "uri": "https://raw.githubusercontent.com/Jasekeee/dojo/main/sbt/metadata/Analyst.png", "type": "image/png" }],
+    "category": "image"
+  }
+}

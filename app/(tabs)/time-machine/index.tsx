@@ -721,7 +721,7 @@ export default function TimeMachineScreen() {
 
         <Text style={screenStyles.disclaimer}>
           Educational simulation. Not financial advice.{'\n'}
-          Past performance doesn't predict future results.
+          Past performance does not predict future results.
         </Text>
       </ScrollView>
     </Screen>

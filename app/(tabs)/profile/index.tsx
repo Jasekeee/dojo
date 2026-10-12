@@ -541,51 +541,42 @@ export default function ProfileScreen() {
           </Animated.View>
         ) : null}
 
-        {/* ── Certify ── */}
-        <Animated.View entering={fadeDown(350, 260)}>
-          <Card style={styles.certifyCard}>
-            <View style={styles.certifyHeader}>
-              <View style={styles.certifyIconBox}>
-                <Text style={styles.certifyIconGlyph}>◈</Text>
+        {/* ── Level Badges ── */}
+        {flags.levelSbt && (
+          <Animated.View entering={fadeDown(350, 260)}>
+            <Card style={styles.badgeCard}>
+              <View style={styles.badgeHeader}>
+                <View style={styles.badgeIconBox}>
+                  <Text style={styles.badgeIconGlyph}>◆</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text variant="title">Level Badges</Text>
+                  <Text variant="caption" style={{ marginTop: 2 }}>
+                    Soulbound tokens on Solana
+                  </Text>
+                </View>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text variant="title">Certify on Solana</Text>
-                <Text variant="caption" style={{ marginTop: 2 }}>
-                  Write your SR to the blockchain
-                </Text>
-              </View>
-            </View>
 
-            <Text variant="body" style={{ color: colors.muted, fontSize: 14, marginTop: space.md }}>
-              Links your wallet to your Dojo rating on-chain. Time-stamped reference, not a score contract.
-            </Text>
-            <Text variant="caption" style={{ marginTop: 4 }}>
-              Requires Solana Mobile wallet · ~0.000005 SOL mainnet fee
-            </Text>
+              <Text variant="body" style={{ color: colors.muted, fontSize: 14, marginTop: space.md }}>
+                Mint a non-transferable badge for your current level. Lives in your wallet on-chain. Self-reported, not audited.
+              </Text>
+              <Text variant="caption" style={{ marginTop: 4 }}>
+                Requires Solana Mobile wallet · ~0.004–0.006 SOL rent
+              </Text>
 
-            <View style={{ marginTop: space.md }}>
-              <PrimaryButton
-                label="Certify rating"
-                onPress={() => router.push('/certify' as any)}
-              />
-            </View>
-          </Card>
-        </Animated.View>
-
-        {/* ── SBT devnet test button (Phase 2) ── */}
-        {flags.levelSbt && (() => {
-          const topLevel = highestEligibleLevel(state.sr)
-          if (!topLevel) return null
-          return (
-            <Animated.View entering={fadeDown(350, 280)}>
-              <PrimaryButton
-                variant="secondary"
-                label={`🧪 Mint ${topLevel} Badge (devnet)`}
-                onPress={() => router.push(`/sbt-mint?level=${topLevel}&sr=${Math.round(state.sr)}` as any)}
-              />
-            </Animated.View>
-          )
-        })()}
+              {highestEligibleLevel(state.sr) != null && (
+                <View style={{ marginTop: space.md }}>
+                  <PrimaryButton
+                    label={`Mint ${highestEligibleLevel(state.sr)} Badge`}
+                    onPress={() => router.push(
+                      `/sbt-mint?level=${highestEligibleLevel(state.sr)}&sr=${Math.round(state.sr)}` as any
+                    )}
+                  />
+                </View>
+              )}
+            </Card>
+          </Animated.View>
+        )}
 
         <Text variant="caption" style={styles.disclaimer}>
           Educational simulation · Not financial advice{'\n'}
@@ -700,14 +691,14 @@ const styles = StyleSheet.create({
   rowDivider: { height: 1, backgroundColor: `${colors.line}60` },
   historyNote: { textAlign: 'center', marginTop: space.xs },
 
-  // Certify
-  certifyCard: {
+  // Level Badges
+  badgeCard: {
     borderWidth: 1,
-    borderColor: `${colors.brand}35`,
+    borderColor: `${colors.gold}35`,
     backgroundColor: colors.bg1,
   },
-  certifyHeader: { flexDirection: 'row', gap: space.md, alignItems: 'center' },
-  certifyIconBox: {
+  badgeHeader: { flexDirection: 'row', gap: space.md, alignItems: 'center' },
+  badgeIconBox: {
     width: 44,
     height: 44,
     borderRadius: 12,
@@ -717,7 +708,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  certifyIconGlyph: {
+  badgeIconGlyph: {
     fontFamily: fonts.displayBold,
     fontSize: 18,
     color: colors.gold,

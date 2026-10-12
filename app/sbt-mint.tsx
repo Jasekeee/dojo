@@ -1,8 +1,3 @@
-/**
- * Temporary devnet test screen for SBT minting.
- * Accessed via router.push('/sbt-mint?level=Trader&sr=507')
- * Will be replaced by the proper badge sheet in Phase 4.
- */
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import React, { useEffect, useRef, useState } from 'react'
@@ -17,10 +12,12 @@ import { colors, fonts, space, SCREEN_PAD } from '@/src/ui/theme'
 import { haptics } from '@/src/ui/haptics'
 import {
   buildSbtTransactions,
+  estimateRealLamports,
   findExistingBadge,
   isEligible,
   sbtExplorerUrl,
   sbtMintExplorerUrl,
+  withRetry,
   SBT_RPC,
   SBT_CLUSTER,
   type SbtLevel,
@@ -30,23 +27,46 @@ import { flags } from '@/src/features/flags'
 const MINT_STATE_KEY = (level: string, wallet: string) =>
   `@dojo/sbt_mint/${level}/${wallet}`
 
-type Step = 'idle' | 'checking' | 'tx1' | 'tx2' | 'confirming' | 'done' | 'error'
+const LAMPORTS_PER_SOL = 1_000_000_000
+
+function lamportsToSol(lamports: number): string {
+  return (lamports / LAMPORTS_PER_SOL).toFixed(6)
+}
+
+type Step =
+  | 'idle'
+  | 'loading_review'
+  | 'review'
+  | 'checking'
+  | 'tx1'
+  | 'tx2'
+  | 'confirming'
+  | 'done'
+  | 'error'
+
+interface ReviewInfo {
+  walletAddress: string
+  totalLamports: number
+  mintLamports: number
+  ataLamports: number
+}
 
 export default function SbtMintScreen() {
-  const router  = useRouter()
-  const params  = useLocalSearchParams<{ level?: string; sr?: string }>()
-  const level   = (params.level ?? 'Rookie') as SbtLevel
-  const sr      = Number(params.sr ?? 0)
+  const router = useRouter()
+  const params = useLocalSearchParams<{ level?: string; sr?: string }>()
+  const level  = (params.level ?? 'Rookie') as SbtLevel
+  const sr     = Number(params.sr ?? 0)
 
   const { connect, account, signAndSendTransactions } = useMobileWallet()
   const conn = React.useMemo(() => new Connection(SBT_RPC, 'confirmed'), [])
 
-  const [step,     setStep]     = useState<Step>('idle')
-  const [error,    setError]    = useState<string | null>(null)
-  const [sig1,     setSig1]     = useState<string | null>(null)
-  const [sig2,     setSig2]     = useState<string | null>(null)
-  const [mintAddr, setMintAddr] = useState<string | null>(null)
-  const [existing, setExisting] = useState<string | null>(null)
+  const [step,       setStep]       = useState<Step>('idle')
+  const [error,      setError]      = useState<string | null>(null)
+  const [sig1,       setSig1]       = useState<string | null>(null)
+  const [sig2,       setSig2]       = useState<string | null>(null)
+  const [mintAddr,   setMintAddr]   = useState<string | null>(null)
+  const [existing,   setExisting]   = useState<string | null>(null)
+  const [review,     setReview]     = useState<ReviewInfo | null>(null)
   const guard = useRef(false)
 
   // Check for existing badge and cached partial mint on mount
@@ -59,13 +79,12 @@ export default function SbtMintScreen() {
         const found = await findExistingBadge(conn, account.publicKey, level)
         if (found) { setExisting(found); setStep('done') }
         else {
-          // Check if Tx1 already succeeded (resume case)
           const cached = await AsyncStorage.getItem(MINT_STATE_KEY(level, account.publicKey.toString()))
           if (cached) {
             const { mintPublicKey, sig1: s1 } = JSON.parse(cached)
             setMintAddr(mintPublicKey)
             setSig1(s1)
-            setStep('tx2') // resume from Tx2
+            setStep('tx2')
           } else {
             setStep('idle')
           }
@@ -76,13 +95,51 @@ export default function SbtMintScreen() {
     })()
   }, [account?.address]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Load review info (connect wallet + fetch real rent) ──────────────────────
+  const loadReview = async () => {
+    if (guard.current) return
+    guard.current = true
+    setError(null)
+    setStep('loading_review')
+
+    try {
+      let pubkey: PublicKey
+      if (account) {
+        pubkey = account.publicKey
+      } else {
+        const connected = await connect()
+        pubkey = connected.publicKey
+      }
+
+      if (!isEligible(sr, level)) {
+        throw new Error(`SR ${sr} is below the ${level} threshold`)
+      }
+
+      const { mintLamports, ataLamports, totalLamports } =
+        await estimateRealLamports(conn, level, sr)
+
+      setReview({
+        walletAddress: pubkey.toString(),
+        totalLamports,
+        mintLamports,
+        ataLamports,
+      })
+      setStep('review')
+      guard.current = false
+    } catch (err: any) {
+      guard.current = false
+      setError(classifyError(err?.message ?? ''))
+      setStep('error')
+    }
+  }
+
+  // ── Execute mint ─────────────────────────────────────────────────────────────
   const mint = async () => {
     if (guard.current) return
     guard.current = true
     setError(null)
 
     try {
-      // Connect wallet if needed
       let pubkey: PublicKey
       if (account) {
         pubkey = account.publicKey
@@ -103,49 +160,36 @@ export default function SbtMintScreen() {
       const mintStr = mintPublicKey.toString()
       setMintAddr(mintStr)
 
-      // ── Tx1: mint account setup ──────────────────────────────────────────────
+      // ── Tx1 ─────────────────────────────────────────────────────────────────
       setStep('tx1')
       haptics.select()
-      const { context: { slot: slot1 } } = await conn.getLatestBlockhashAndContext()
+      const { context: { slot: slot1 } } = await withRetry(() => conn.getLatestBlockhashAndContext())
       const s1 = await signAndSendTransactions(setupTx, slot1)
       setSig1(s1)
-      // Cache mint pubkey so user can resume if Tx2 fails
       await AsyncStorage.setItem(MINT_STATE_KEY(level, pubkey.toString()),
         JSON.stringify({ mintPublicKey: mintStr, sig1: s1 }))
 
-      // Confirm Tx1 before sending Tx2
       setStep('confirming')
-      const { blockhash: bh, lastValidBlockHeight: lvbh } = await conn.getLatestBlockhash()
-      await conn.confirmTransaction({ signature: s1, blockhash: bh, lastValidBlockHeight: lvbh })
+      const { blockhash: bh, lastValidBlockHeight: lvbh } = await withRetry(() => conn.getLatestBlockhash())
+      await withRetry(() => conn.confirmTransaction({ signature: s1, blockhash: bh, lastValidBlockHeight: lvbh }))
 
-      // ── Tx2: metadata + mint + revoke ────────────────────────────────────────
+      // ── Tx2 ─────────────────────────────────────────────────────────────────
       setStep('tx2')
       haptics.select()
-      const { context: { slot: slot2 } } = await conn.getLatestBlockhashAndContext()
+      const { context: { slot: slot2 } } = await withRetry(() => conn.getLatestBlockhashAndContext())
       const s2 = await signAndSendTransactions(mintTx, slot2)
       setSig2(s2)
 
       setStep('confirming')
-      const { blockhash: bh2, lastValidBlockHeight: lvbh2 } = await conn.getLatestBlockhash()
-      await conn.confirmTransaction({ signature: s2, blockhash: bh2, lastValidBlockHeight: lvbh2 })
+      const { blockhash: bh2, lastValidBlockHeight: lvbh2 } = await withRetry(() => conn.getLatestBlockhash())
+      await withRetry(() => conn.confirmTransaction({ signature: s2, blockhash: bh2, lastValidBlockHeight: lvbh2 }))
 
-      // Clear resume cache on success
       await AsyncStorage.removeItem(MINT_STATE_KEY(level, pubkey.toString()))
       setStep('done')
       haptics.win()
     } catch (err: any) {
       guard.current = false
-      const msg: string = err?.message ?? ''
-      const lc = msg.toLowerCase()
-      if (lc.includes('cancel') || lc.includes('reject') || lc.includes('declined')) {
-        setError('Cancelled. Nothing was submitted.')
-      } else if (lc.includes('insufficient') || lc.includes('lamport')) {
-        setError('Not enough SOL. Get devnet SOL from faucet.solana.com.')
-      } else if (lc.includes('timeout') || lc.includes('timed out')) {
-        setError('Timed out. Your transaction may still confirm — check Explorer.')
-      } else {
-        setError(msg || 'Unknown error')
-      }
+      setError(classifyError(err?.message ?? ''))
       setStep('error')
       haptics.error()
     }
@@ -163,30 +207,30 @@ export default function SbtMintScreen() {
       const { mintTx } = await buildSbtTransactions(conn, pubkey, level, sr)
       setStep('tx2')
       haptics.select()
-      const { context: { slot: slot2r } } = await conn.getLatestBlockhashAndContext()
+      const { context: { slot: slot2r } } = await withRetry(() => conn.getLatestBlockhashAndContext())
       const s2 = await signAndSendTransactions(mintTx, slot2r)
       setSig2(s2)
       setStep('confirming')
-      const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash()
-      await conn.confirmTransaction({ signature: s2, blockhash, lastValidBlockHeight })
+      const { blockhash, lastValidBlockHeight } = await withRetry(() => conn.getLatestBlockhash())
+      await withRetry(() => conn.confirmTransaction({ signature: s2, blockhash, lastValidBlockHeight }))
       await AsyncStorage.removeItem(MINT_STATE_KEY(level, pubkey.toString()))
       setStep('done')
       haptics.win()
     } catch (err: any) {
       guard.current = false
-      setError(err?.message ?? 'Unknown error')
+      setError(classifyError(err?.message ?? ''))
       setStep('error')
     }
   }
 
-  const retry = () => { guard.current = false; setStep('idle'); setError(null) }
+  const retry = () => { guard.current = false; setStep('idle'); setError(null); setReview(null) }
 
   if (!flags.levelSbt) {
     return (
       <Screen>
         <View style={s.center}>
           <Text variant="body" style={{ color: colors.muted, textAlign: 'center' }}>
-            SBT minting is currently disabled.
+            Level Badges are currently disabled.
           </Text>
           <Text variant="label" style={s.back} onPress={() => router.back()}>← Back</Text>
         </View>
@@ -200,7 +244,7 @@ export default function SbtMintScreen() {
 
         {/* Header */}
         <View style={s.header}>
-          <Text style={s.eyebrow}>DOJO BADGE · {SBT_CLUSTER.toUpperCase()}</Text>
+          <Text style={s.eyebrow}>DOJO BADGE · SOLANA {SBT_CLUSTER.toUpperCase()}</Text>
           <Text style={s.title}>{level}</Text>
           <Text variant="body" style={{ color: colors.muted }}>
             Non-transferable · Earned in Dojo · Self-reported
@@ -219,7 +263,7 @@ export default function SbtMintScreen() {
           </View>
           <View style={s.row}>
             <Text variant="caption">Network</Text>
-            <Text variant="caption" style={{ color: colors.muted }}>Solana {SBT_CLUSTER}</Text>
+            <Text variant="caption" style={{ color: colors.gain }}>Solana {SBT_CLUSTER}</Text>
           </View>
           {mintAddr && (
             <View style={s.row}>
@@ -235,8 +279,47 @@ export default function SbtMintScreen() {
           )}
         </Card>
 
+        {/* Review step */}
+        {step === 'review' && review && (
+          <Card variant="elevated" style={{ gap: space.md }}>
+            <Text variant="label" style={{ letterSpacing: 1 }}>REVIEW</Text>
+            <View style={s.row}>
+              <Text variant="caption">Wallet</Text>
+              <Text variant="numeric" style={{ color: colors.text, fontSize: 11 }}>
+                {review.walletAddress.slice(0, 8)}…{review.walletAddress.slice(-6)}
+              </Text>
+            </View>
+            <View style={s.row}>
+              <Text variant="caption">Cluster</Text>
+              <Text variant="caption" style={{ color: colors.gain }}>{SBT_CLUSTER}</Text>
+            </View>
+            <View style={s.row}>
+              <Text variant="caption">Mint account rent</Text>
+              <Text variant="numeric" style={{ color: colors.gold, fontSize: 12 }}>
+                {lamportsToSol(review.mintLamports)} SOL
+              </Text>
+            </View>
+            <View style={s.row}>
+              <Text variant="caption">Token account rent</Text>
+              <Text variant="numeric" style={{ color: colors.gold, fontSize: 12 }}>
+                {lamportsToSol(review.ataLamports)} SOL
+              </Text>
+            </View>
+            <View style={[s.row, { borderTopWidth: 1, borderTopColor: colors.line, paddingTop: space.sm }]}>
+              <Text variant="body" style={{ fontWeight: '700' }}>Total estimated</Text>
+              <Text variant="numeric" style={{ color: colors.gold }}>
+                ~{lamportsToSol(review.totalLamports)} SOL
+              </Text>
+            </View>
+            <Text variant="caption" style={{ color: colors.muted, lineHeight: 17 }}>
+              Rent is recoverable if the badge is later closed. Two transactions will be signed.
+            </Text>
+            <PrimaryButton label={`Mint ${level} Badge`} onPress={mint} />
+          </Card>
+        )}
+
         {/* Step tracker */}
-        {step !== 'idle' && step !== 'error' && (
+        {step !== 'idle' && step !== 'loading_review' && step !== 'review' && step !== 'error' && (
           <Card style={{ gap: space.md }}>
             <Text variant="label" style={{ letterSpacing: 1 }}>PROGRESS</Text>
             {[
@@ -246,10 +329,10 @@ export default function SbtMintScreen() {
               { id: 'tx2',        label: 'Step 2 / 2 — Sign in wallet' },
               { id: 'done',       label: 'Minted ✓' },
             ].map(({ id, label }) => {
-              const order = ['checking','tx1','confirming','tx2','done']
-              const cur = order.indexOf(step)
-              const self = order.indexOf(id)
-              const done = cur > self
+              const order = ['checking', 'tx1', 'confirming', 'tx2', 'done']
+              const cur   = order.indexOf(step)
+              const self  = order.indexOf(id)
+              const done   = cur > self
               const active = cur === self
               return (
                 <View key={id} style={s.stepRow}>
@@ -282,7 +365,7 @@ export default function SbtMintScreen() {
             <Text variant="caption" style={{ color: colors.muted }}>
               {existing
                 ? 'You already hold this level badge.'
-                : 'The badge lives in your wallet. Supply is fixed at 1.'}
+                : 'The badge lives in your wallet. Supply fixed at 1.'}
             </Text>
             {(sig2 || existing) && (
               <PrimaryButton
@@ -319,11 +402,14 @@ export default function SbtMintScreen() {
         )}
 
         {/* CTA */}
-        {(step === 'idle') && (
+        {step === 'idle' && (
           <PrimaryButton
             label={account ? `Mint ${level} Badge` : 'Connect wallet & mint'}
-            onPress={mint}
+            onPress={loadReview}
           />
+        )}
+        {step === 'loading_review' && (
+          <PrimaryButton label="Preparing…" onPress={() => {}} loading />
         )}
         {step === 'tx2' && !sig1 && (
           <PrimaryButton label="Resume: Sign Step 2" onPress={resumeTx2} />
@@ -339,11 +425,37 @@ export default function SbtMintScreen() {
 
         <Text variant="caption" style={s.disclaimer}>
           Educational simulation. Not financial advice.{'\n'}
-          Past performance doesn't predict future results.
+          Past performance does not predict future results.
         </Text>
       </ScrollView>
     </Screen>
   )
+}
+
+function classifyError(msg: string): string {
+  const lc = msg.toLowerCase()
+  if (lc.includes('cancel') || lc.includes('reject') || lc.includes('declined')) {
+    return 'Cancelled. Nothing was submitted.'
+  }
+  if (lc.includes('insufficient') || lc.includes('lamport')) {
+    return 'Not enough SOL to pay rent and fees. Add SOL to your wallet.'
+  }
+  if (lc.includes('timeout') || lc.includes('timed out')) {
+    return 'Timed out. Your transaction may still confirm — check Explorer.'
+  }
+  if (
+    lc.includes('mismatch') ||
+    lc.includes('devnet') ||
+    lc.includes('testnet') ||
+    lc.includes('wrong cluster') ||
+    lc.includes('wrong network')
+  ) {
+    return 'Switch your wallet to Mainnet and try again.'
+  }
+  if (lc.includes('429') || lc.includes('too many requests')) {
+    return 'RPC rate limit hit. Wait a few seconds and try again.'
+  }
+  return msg || 'Unknown error'
 }
 
 const s = StyleSheet.create({

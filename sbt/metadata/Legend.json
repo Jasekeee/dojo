@@ -1,0 +1,15 @@
+{
+  "name": "Dojo Legend",
+  "symbol": "DOJO",
+  "description": "Earned in Dojo. Legend level — 850 SR, the top tier. Exceptional read on market structure. Self-reported, not a verified credential.",
+  "image": "https://raw.githubusercontent.com/Jasekeee/dojo/main/sbt/metadata/Legend.png",
+  "attributes": [
+    { "trait_type": "Level", "value": "Legend" },
+    { "trait_type": "Min SR", "value": "850" },
+    { "trait_type": "Rank", "value": "V" }
+  ],
+  "properties": {
+    "files": [{ "uri": "https://raw.githubusercontent.com/Jasekeee/dojo/main/sbt/metadata/Legend.png", "type": "image/png" }],
+    "category": "image"
+  }
+}
