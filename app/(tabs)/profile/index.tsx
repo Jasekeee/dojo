@@ -1,5 +1,7 @@
 import { useRouter } from 'expo-router'
 import React, { useCallback, useMemo } from 'react'
+import { flags } from '@/src/features/flags'
+import { highestEligibleLevel } from '@/src/chain/sbt'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import Animated from 'react-native-reanimated'
 import { useFocusEffect } from '@react-navigation/native'
@@ -569,6 +571,21 @@ export default function ProfileScreen() {
             </View>
           </Card>
         </Animated.View>
+
+        {/* ── SBT devnet test button (Phase 2) ── */}
+        {flags.levelSbt && (() => {
+          const topLevel = highestEligibleLevel(state.sr)
+          if (!topLevel) return null
+          return (
+            <Animated.View entering={fadeDown(350, 280)}>
+              <PrimaryButton
+                variant="secondary"
+                label={`🧪 Mint ${topLevel} Badge (devnet)`}
+                onPress={() => router.push(`/sbt-mint?level=${topLevel}&sr=${Math.round(state.sr)}` as any)}
+              />
+            </Animated.View>
+          )
+        })()}
 
         <Text variant="caption" style={styles.disclaimer}>
           Educational simulation · Not financial advice{'\n'}

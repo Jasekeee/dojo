@@ -1,5 +1,5 @@
 export const flags = {
-  levelSbt: false, // Level SBT badges — off until devnet verified
+  levelSbt: true, // Level SBT badges — devnet test enabled
 } as const
 
 export type Flags = typeof flags
