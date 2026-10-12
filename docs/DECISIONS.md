@@ -30,6 +30,25 @@ Chosen via `npm create solana-dapp@latest` → template `gh:solana-foundation/te
 - The scaffold's `app/_layout.tsx` wrapped `(tabs)` in `<Stack.Protected guard={isAuthenticated}>`, forcing MWA wallet sign-in before any screen was reachable. This violates SPEC.md P0 ("Fresh install -> first episode playable in < 30s, no wallet required") and section 12 acceptance criteria.
 - Fix: removed the guard; `(tabs)` is always reachable, `sign-in` stays as an ordinary route for later Certify/Account flows, not a startup gate.
 
+## 2026-10-12 — State persistence: AsyncStorage
+- Chose `@react-native-async-storage/async-storage` (already installed, v2.2.0) over MMKV.
+- Reason: already a project dependency, no additional native build needed, sufficient for our small state (single JSON blob, ~few KB). MMKV would be faster but requires an extra native module and a rebuild.
+- Implementation: `src/state/store.ts` — single key `@dojo/state/v1`.
+
+## 2026-10-12 — Time Machine data: Binance historical fetch
+- Fetched historical OHLCV from Binance public API (no key) for 5 campaigns:
+  - FTX Collapse Nov 2022: SOLUSDT 4h, Oct 15 – Dec 1 2022 (283 candles). FTX episode 1 entry $35.75, hold −59.3%. Episode 2 entry $20.05 (during collapse), episode 3 entry $14.17 (post-bankruptcy).
+  - LUNA Crash May 2022: BTCUSDT 4h, Apr 15 – Jun 1 2022 (283 candles). Entry $36,055 before depeg, $28,472 during.
+  - August 2024 Flush: SOLUSDT 4h, Jul 15 – Sep 1 2024 (289 candles). Entry $169.69 before flush, $115.96 at the low.
+  - Tariff Shock Apr 2025: BTCUSDT 4h, Mar 15 – May 1 2025 (283 candles). Entry $83,096 before announcement, $76,230 on the pause bounce.
+  - Oct 2025 Cascade: SOLUSDT 1h, Sep 20 – Nov 1 2025 (1009 candles). Entry $223.14 and $180.96.
+- All data cached in `data/raw/campaign_*.json`. All facts verified from downloaded Binance candles; no numbers invented.
+
+## 2026-10-12 — Certify: devnet for development, mainnet decision deferred to Phase 8 freeze
+- SPEC.md section 8.2: cluster is config-driven. Using devnet during development (free SOL, no real cost).
+- Mainnet switch decision to be made at freeze with Jake (tiny fee ~0.001 SOL per certification).
+- SPL Memo program ID `MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr` — from Solana docs, not memorized.
+
 ## 2026-10-11 — Skia confirmed working; vitest for engine tests
 - SPEC.md section 9 marked `@shopify/react-native-skia` [VERIFY works in the scaffold's dev build]. Installed `@shopify/react-native-skia` (2.14.0) + ran a native rebuild (`expo run:android`): CMake compiled its native libs for arm64-v8a without issue, app installed and the chart rendered correctly on the Seeker. Confirmed working — used for `src/chart/CandleChart.tsx`.
 - Test runner: `vitest`, not `jest-expo`. `src/engine/` is zero-UI-dependency pure TS by design (architecture rule in SPEC section 9), so it doesn't need React Native's test environment/mocks — vitest runs it directly and fast (~100ms for 22 tests). `npm test` runs it.
