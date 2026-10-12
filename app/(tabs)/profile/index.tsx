@@ -558,7 +558,7 @@ export default function ProfileScreen() {
               Links your wallet to your Dojo rating on-chain. Time-stamped reference, not a score contract.
             </Text>
             <Text variant="caption" style={{ marginTop: 4 }}>
-              Requires Solana Mobile wallet · standard transaction fee
+              Requires Solana Mobile wallet · ~0.000005 SOL mainnet fee
             </Text>
 
             <View style={{ marginTop: space.md }}>

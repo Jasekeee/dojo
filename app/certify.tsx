@@ -18,10 +18,10 @@ import { Text } from '@/src/ui/components/Text'
 import { getLevel } from '@/src/engine/rating'
 import { loadState } from '@/src/state/store'
 import { haptics } from '@/src/ui/haptics'
-import { colors, space } from '@/src/ui/theme'
+import { colors, fonts, space, SCREEN_PAD } from '@/src/ui/theme'
 
 const MEMO_PROGRAM_ID = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr')
-const RPC_ENDPOINT = 'https://api.devnet.solana.com'
+const RPC_ENDPOINT = 'https://api.mainnet-beta.solana.com'
 const CERT_SIG_KEY = '@dojo/cert_sig'
 
 function buildMemoInstruction(signer: PublicKey, memo: string): TransactionInstruction {
@@ -120,7 +120,7 @@ export default function CertifyScreen() {
   }, [])
 
   const explorerUrl = (sig: string) =>
-    `https://explorer.solana.com/tx/${sig}?cluster=devnet`
+    `https://explorer.solana.com/tx/${sig}`
 
   const certify = async () => {
     if (certifying.current) return
@@ -230,13 +230,13 @@ export default function CertifyScreen() {
         {/* Header */}
         <Animated.View entering={FadeInDown.duration(350).springify()} style={styles.header}>
           <View style={styles.iconWrap}>
-            <Text style={{ fontFamily: 'SpaceGrotesk_700Bold', fontSize: 26, color: colors.brand, letterSpacing: -1 }}>◈</Text>
+            <Text style={{ fontFamily: fonts.displayBold, fontSize: 26, color: colors.gold, letterSpacing: -1 }}>◈</Text>
           </View>
-          <Text variant="display" style={{ fontSize: 28, marginTop: space.md }}>
+          <Text style={styles.headerTitle}>
             Certify on Solana
           </Text>
-          <Text variant="body" style={{ color: colors.muted, marginTop: space.xs, lineHeight: 22 }}>
-            Write your Skill Rating to Solana devnet as a signed memo transaction.
+          <Text variant="body" style={{ color: colors.muted, lineHeight: 22 }}>
+            Write your Skill Rating to Solana as a signed memo transaction.
           </Text>
         </Animated.View>
 
@@ -259,14 +259,14 @@ export default function CertifyScreen() {
             <View style={styles.divider} />
             <View style={styles.row}>
               <Text variant="caption">Network</Text>
-              <Text variant="caption" style={{ color: colors.warn }}>Solana devnet</Text>
+              <Text variant="caption" style={{ color: colors.gain }}>Solana mainnet</Text>
             </View>
             <View style={styles.row}>
               <Text variant="caption">Fee</Text>
-              <Text variant="caption" style={{ color: colors.muted }}>~0.000005 devnet SOL</Text>
+              <Text variant="caption" style={{ color: colors.muted }}>~0.000005 SOL</Text>
             </View>
             <Text variant="caption" style={styles.feeNote}>
-              Devnet SOL has no real-world value. Your wallet must hold a small devnet SOL balance to pay fees.
+              A small amount of real SOL is required to pay the transaction fee.
             </Text>
           </Card>
         </Animated.View>
@@ -328,7 +328,7 @@ export default function CertifyScreen() {
             <Card variant="hero" style={{ gap: space.md }}>
               <View style={styles.doneHeader}>
                 <View style={styles.doneIcon}>
-                  <Text style={{ fontFamily: 'SpaceGrotesk_700Bold', fontSize: 16, color: colors.bg0 }}>✓</Text>
+                  <Text style={{ fontFamily: fonts.displayBold, fontSize: 16, color: colors.bg0 }}>✓</Text>
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text variant="title" style={{ color: colors.gain }}>Confirmed!</Text>
@@ -426,9 +426,17 @@ export default function CertifyScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { padding: space.lg, gap: space.lg, paddingBottom: 100 },
+  content: { padding: SCREEN_PAD, gap: space.lg, paddingBottom: 100 },
 
-  header: { paddingVertical: space.md },
+  header: { paddingVertical: space.md, gap: space.sm },
+  headerTitle: {
+    fontFamily: fonts.serif,
+    fontSize: 30,
+    lineHeight: 36,
+    letterSpacing: -0.3,
+    color: colors.text,
+    marginTop: space.xs,
+  },
   iconWrap: {
     width: 72, height: 72, borderRadius: 20,
     backgroundColor: `${colors.brand}15`,
