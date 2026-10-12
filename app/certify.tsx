@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router'
 import React, { useState } from 'react'
 import { Linking, ScrollView, StyleSheet, View } from 'react-native'
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated'
 import {
   Connection,
   PublicKey,
@@ -16,12 +17,9 @@ import { Text } from '@/src/ui/components/Text'
 import { getLevel } from '@/src/engine/rating'
 import { loadState } from '@/src/state/store'
 import { haptics } from '@/src/ui/haptics'
-import { colors, space } from '@/src/ui/theme'
+import { colors, radius, space } from '@/src/ui/theme'
 
-// SPL Memo program — verified address from Solana docs.
 const MEMO_PROGRAM_ID = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr')
-
-// Devnet endpoint — switch to mainnet before final submission per SPEC.md section 8.2.
 const RPC_ENDPOINT = 'https://api.devnet.solana.com'
 
 function buildMemoInstruction(signer: PublicKey, memo: string): TransactionInstruction {
@@ -33,6 +31,60 @@ function buildMemoInstruction(signer: PublicKey, memo: string): TransactionInstr
 }
 
 type Step = 'idle' | 'connecting' | 'signing' | 'confirming' | 'done' | 'error'
+
+const STEPS: { id: Step; label: string }[] = [
+  { id: 'connecting', label: 'Connect wallet' },
+  { id: 'signing', label: 'Build transaction' },
+  { id: 'confirming', label: 'Confirm on-chain' },
+  { id: 'done', label: 'Certified' },
+]
+
+const STEP_ORDER = ['connecting', 'signing', 'confirming', 'done']
+
+function StepRow({ id, label, current }: { id: Step; label: string; current: Step }) {
+  const idx = STEP_ORDER.indexOf(id)
+  const currentIdx = STEP_ORDER.indexOf(current)
+  const done = currentIdx > idx
+  const active = current === id
+
+  return (
+    <View style={stepStyles.row}>
+      <View style={[
+        stepStyles.dot,
+        done && { backgroundColor: colors.gain, borderColor: colors.gain },
+        active && { borderColor: colors.brand },
+      ]}>
+        {done && <Text style={{ color: '#000', fontSize: 10, fontWeight: '700' }}>✓</Text>}
+        {active && <View style={stepStyles.activePulse} />}
+      </View>
+      <Text
+        variant="body"
+        style={{ color: done ? colors.gain : active ? colors.text : colors.muted, fontSize: 14 }}
+      >
+        {label}
+      </Text>
+    </View>
+  )
+}
+
+const stepStyles = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  dot: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: colors.line,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activePulse: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.brand,
+  },
+})
 
 export default function CertifyScreen() {
   const router = useRouter()
@@ -48,7 +100,6 @@ export default function CertifyScreen() {
   const certify = async () => {
     setErrorMsg(null)
     try {
-      // Step 1: Connect wallet
       setStep('connecting')
       haptics.select()
       let wallet = account
@@ -56,13 +107,10 @@ export default function CertifyScreen() {
         await connect()
         wallet = account
       }
-      if (!wallet) {
-        throw new Error('Wallet connection cancelled.')
-      }
+      if (!wallet) throw new Error('Wallet connection cancelled.')
 
       const pubkey = new PublicKey(wallet.address)
 
-      // Step 2: Build memo payload
       const state = await loadState()
       const payload = JSON.stringify({
         v: 1,
@@ -76,7 +124,6 @@ export default function CertifyScreen() {
       setStep('signing')
       haptics.confirm()
 
-      // Step 3: Build transaction
       const conn = connection ?? new Connection(RPC_ENDPOINT, 'confirmed')
       const {
         context: { slot: minContextSlot },
@@ -91,7 +138,6 @@ export default function CertifyScreen() {
 
       const tx = new VersionedTransaction(message)
 
-      // Step 4: Sign & send via MWA
       setStep('confirming')
       const sig = await signAndSendTransactions(tx, minContextSlot)
       setTxSignature(sig)
@@ -104,85 +150,123 @@ export default function CertifyScreen() {
     }
   }
 
+  const isInProgress = ['connecting', 'signing', 'confirming'].includes(step)
+
   return (
     <Screen>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <Text variant="label" style={{ color: colors.brand }}>Certify</Text>
-          <Text variant="display" style={{ fontSize: 28 }}>Write your rating{'\n'}to Solana</Text>
-        </View>
 
-        <Card style={{ gap: space.md }}>
-          <Text variant="title">What gets written</Text>
-          <Text variant="body" style={{ color: colors.muted }}>
-            A Memo transaction is sent to Solana with your Skill Rating, level, and round count. The
-            transaction signature is verifiable proof — it links your wallet address to your Dojo record.
+        {/* Header */}
+        <Animated.View entering={FadeInDown.duration(350).springify()} style={styles.header}>
+          <View style={styles.iconWrap}>
+            <Text style={{ fontSize: 36 }}>⛓️</Text>
+          </View>
+          <Text variant="display" style={{ fontSize: 30, marginTop: space.md }}>
+            Certify on Solana
           </Text>
-          <Text variant="body" style={{ color: colors.muted }}>
-            This uses devnet SOL (free). No real money is spent.
+          <Text variant="body" style={{ color: colors.muted, marginTop: space.xs, lineHeight: 22 }}>
+            Write your Skill Rating to the blockchain. Verifiable proof of your edge.
           </Text>
-        </Card>
+        </Animated.View>
 
-        {step === 'idle' && (
-          <PrimaryButton label="Connect wallet & certify" onPress={certify} />
-        )}
-
-        {step === 'connecting' && (
-          <Card style={{ alignItems: 'center', gap: space.sm }}>
-            <Text variant="label">Opening your wallet…</Text>
+        {/* What gets written */}
+        <Animated.View entering={FadeInDown.duration(350).delay(60).springify()}>
+          <Card variant="elevated" style={{ gap: space.sm }}>
+            <Text variant="label" style={{ letterSpacing: 1 }}>WHAT GETS WRITTEN</Text>
+            <View style={styles.payloadRow}>
+              <Text variant="caption">Skill Rating</Text>
+              <Text variant="numeric" style={{ color: colors.brand, fontSize: 14 }}>SR + Level</Text>
+            </View>
+            <View style={styles.payloadRow}>
+              <Text variant="caption">Round count</Text>
+              <Text variant="numeric" style={{ color: colors.brand, fontSize: 14 }}>rounds played</Text>
+            </View>
+            <View style={styles.payloadRow}>
+              <Text variant="caption">Network</Text>
+              <Text variant="caption" style={{ color: colors.warn }}>Devnet (free)</Text>
+            </View>
           </Card>
+        </Animated.View>
+
+        {/* Step tracker */}
+        {step !== 'idle' && step !== 'error' && (
+          <Animated.View entering={FadeIn.duration(300)}>
+            <Card style={{ gap: space.lg }}>
+              <Text variant="label" style={{ letterSpacing: 1 }}>PROGRESS</Text>
+              {STEPS.map((s) => (
+                <StepRow key={s.id} id={s.id} label={s.label} current={step} />
+              ))}
+            </Card>
+          </Animated.View>
         )}
 
-        {step === 'signing' && (
-          <Card style={{ alignItems: 'center', gap: space.sm }}>
-            <Text variant="label">Building transaction…</Text>
-          </Card>
-        )}
-
-        {step === 'confirming' && (
-          <Card style={{ alignItems: 'center', gap: space.sm }}>
-            <Text variant="label">Waiting for confirmation…</Text>
-          </Card>
-        )}
-
+        {/* Done state */}
         {step === 'done' && txSignature && (
-          <Card style={{ gap: space.md }}>
-            <Text variant="title" style={{ color: colors.gain }}>Certified ✓</Text>
-            <Text variant="body" style={{ color: colors.muted }}>
-              Your rating is on-chain. Transaction:
-            </Text>
-            <Text
-              variant="label"
-              style={{ color: colors.brand }}
-              onPress={() => explorerUrl && Linking.openURL(explorerUrl)}
-            >
-              {txSignature.slice(0, 16)}…{txSignature.slice(-8)}
-            </Text>
-            <PrimaryButton
-              label="View on Explorer"
-              onPress={() => explorerUrl && Linking.openURL(explorerUrl)}
-            />
-          </Card>
+          <Animated.View entering={FadeInDown.duration(350).springify()}>
+            <Card variant="accent" style={{ gap: space.md }}>
+              <View style={styles.doneHeader}>
+                <Text style={{ fontSize: 28 }}>✅</Text>
+                <View style={{ flex: 1 }}>
+                  <Text variant="title" style={{ color: colors.gain }}>Certified!</Text>
+                  <Text variant="caption" style={{ marginTop: 2 }}>Your rating is on-chain</Text>
+                </View>
+              </View>
+              <View style={styles.txRow}>
+                <Text variant="caption">Transaction</Text>
+                <Text
+                  variant="numeric"
+                  style={{ color: colors.brand, fontSize: 12 }}
+                  onPress={() => explorerUrl && Linking.openURL(explorerUrl)}
+                >
+                  {txSignature.slice(0, 12)}…{txSignature.slice(-8)}
+                </Text>
+              </View>
+              <PrimaryButton
+                label="View on Explorer →"
+                onPress={() => explorerUrl && Linking.openURL(explorerUrl)}
+              />
+            </Card>
+          </Animated.View>
         )}
 
+        {/* Error state */}
         {step === 'error' && (
-          <Card style={{ gap: space.md }}>
-            <Text variant="title" style={{ color: colors.loss }}>Failed</Text>
-            <Text variant="body" style={{ color: colors.muted }}>{errorMsg}</Text>
-            <PrimaryButton label="Try again" onPress={() => { setStep('idle'); setErrorMsg(null) }} />
-          </Card>
+          <Animated.View entering={FadeInDown.duration(350).springify()}>
+            <Card style={{ gap: space.md }}>
+              <Text variant="title" style={{ color: colors.loss }}>Failed</Text>
+              <Text variant="body" style={{ color: colors.muted, fontSize: 14 }}>{errorMsg}</Text>
+              <PrimaryButton
+                variant="secondary"
+                label="Try again"
+                onPress={() => { setStep('idle'); setErrorMsg(null) }}
+              />
+            </Card>
+          </Animated.View>
         )}
 
-        <Text variant="label" style={styles.disclaimer}>
-          Educational simulation. Not financial advice.
-        </Text>
+        {/* CTA */}
+        {step === 'idle' && (
+          <Animated.View entering={FadeInDown.duration(350).delay(120).springify()}>
+            <PrimaryButton label="Connect wallet & certify" onPress={certify} />
+          </Animated.View>
+        )}
+
+        {isInProgress && (
+          <Animated.View entering={FadeIn.duration(200)}>
+            <PrimaryButton label="Working…" onPress={() => {}} loading />
+          </Animated.View>
+        )}
 
         <Text
           variant="label"
-          style={{ color: colors.muted, textAlign: 'center', marginTop: space.sm }}
+          style={{ color: colors.muted, textAlign: 'center' }}
           onPress={() => router.back()}
         >
-          ← Back to Profile
+          ← Back
+        </Text>
+
+        <Text variant="caption" style={styles.disclaimer}>
+          Educational simulation. Not financial advice.{'\n'}Past performance doesn't predict future results.
         </Text>
       </ScrollView>
     </Screen>
@@ -190,7 +274,24 @@ export default function CertifyScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { padding: space.lg, gap: space.lg, paddingBottom: space.xxxl },
-  header: { gap: space.xs, paddingVertical: space.md },
-  disclaimer: { color: colors.muted, fontSize: 11, textAlign: 'center', marginTop: space.md },
+  content: { padding: space.lg, gap: space.lg, paddingBottom: 100 },
+
+  header: { paddingVertical: space.md },
+  iconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 20,
+    backgroundColor: `${colors.brand}15`,
+    borderWidth: 1,
+    borderColor: `${colors.brand}30`,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  payloadRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+
+  doneHeader: { flexDirection: 'row', gap: space.md, alignItems: 'center' },
+  txRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+
+  disclaimer: { textAlign: 'center', color: colors.muted, lineHeight: 18 },
 })
