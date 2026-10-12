@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router'
 import React, { useCallback, useMemo } from 'react'
-import { ScrollView, StyleSheet, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import Animated from 'react-native-reanimated'
 import { useFocusEffect } from '@react-navigation/native'
 import { Card } from '@/src/ui/components/Card'
@@ -15,6 +15,7 @@ import { fadeDown } from '@/src/ui/motion'
 import { LEVEL_BANDS, LevelBand, getLevelBand } from '@/src/ui/levelConfig'
 import { MetricBar, getMetricColor } from '@/src/ui/components/MetricBar'
 import { SRBar } from '@/src/ui/components/SRBar'
+import { useShareCard } from '@/src/ui/components/ShareCard'
 import type { EpisodeResultRecord } from '@/src/engine/metrics'
 
 // ─── Metrics ──────────────────────────────────────────────────────────────────
@@ -240,6 +241,12 @@ export default function ProfileScreen() {
 
   const weakest = useMemo(() => weakestTags(state.history, 3), [state.history])
 
+  const { share, sharing, cardView } = useShareCard(
+    state.sr,
+    state.streakDays,
+    state.history.length,
+  )
+
   const totalRounds = state.history.length
   const recentHistory = [...state.history].slice(-8).reverse()
   const srToNext = nextBand ? Math.ceil(nextBand.min - state.sr) : 0
@@ -334,8 +341,24 @@ export default function ProfileScreen() {
                 />
               )}
             </View>
+
+            {/* Share card button */}
+            <Pressable
+              onPress={share}
+              disabled={sharing}
+              accessibilityRole="button"
+              accessibilityLabel="Share your Dojo rating card"
+              style={({ pressed }) => [styles.shareBtn, pressed && { opacity: 0.7 }]}
+            >
+              <Text style={styles.shareBtnText}>
+                {sharing ? 'Preparing…' : '↑ Share rating'}
+              </Text>
+            </Pressable>
           </Card>
         </Animated.View>
+
+        {/* Off-screen card captured by ViewShot */}
+        {cardView}
 
         {/* ── Level Ladder ── */}
         <Animated.View entering={fadeDown(350, 60)}>
@@ -585,6 +608,22 @@ const styles = StyleSheet.create({
   progressLabels: { flexDirection: 'row', justifyContent: 'space-between' },
   statsRow: { flexDirection: 'row', gap: space.xl, marginTop: space.md },
   statItem: { gap: 2 },
+  shareBtn: {
+    marginTop: space.md,
+    paddingVertical: space.sm,
+    paddingHorizontal: space.lg,
+    borderRadius: 999,
+    backgroundColor: `${colors.brand}18`,
+    borderWidth: 1,
+    borderColor: `${colors.brand}40`,
+    alignSelf: 'flex-start',
+  },
+  shareBtnText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+    color: colors.brand,
+    letterSpacing: 0.3,
+  },
 
   // Level ladder
   ladderCard: { paddingVertical: space.md },
