@@ -5,8 +5,10 @@ import {
   requestNotificationPermission,
   scheduleDailyNotification,
   isDailyNotificationScheduled,
+  refreshDailyNotification,
   DEFAULT_NOTIF_HOUR,
 } from '@/src/notifications'
+import { analytics } from '@/src/analytics'
 import Animated from 'react-native-reanimated'
 import { completeDailySession, loadState, type AppState, type RoundResult } from '@/src/state/store'
 import { computeBehaviourMetrics, generateInsights } from '@/src/engine/insights'
@@ -133,10 +135,30 @@ export default function DailySummaryScreen() {
         haptics.streakMilestone()
       }
 
-      // ── 7. Notification prompt — show only if not already scheduled ──
-      if (!alreadyCompleted) {
+      // ── 7. Analytics ──
+      if (!alreadyCompleted && sessionResults.length > 0) {
+        const srBefore = completed.sr - displayRounds.reduce((s, r) => s + (r.srDelta ?? 0), 0)
+        const wins = displayRounds.filter((r) => r.score > 0).length
+        analytics.sessionComplete({
+          rounds: displayRounds.length,
+          wins,
+          winRate: displayRounds.length > 0 ? Math.round((wins / displayRounds.length) * 100) : 0,
+          srBefore,
+          srAfter: completed.sr,
+          srDelta: displayRounds.reduce((s, r) => s + (r.srDelta ?? 0), 0),
+          streakDays: completed.streakDays,
+          dailyNumber: Math.max(1, Math.round((new Date(`${dateToISODate(new Date())}T00:00:00.000Z`).getTime() - new Date('2026-10-11T00:00:00.000Z').getTime()) / 86400000) + 1),
+        })
+      }
+
+      // ── 8. Notification prompt + refresh streak content ──
+      if (!alreadyCompleted && mounted) {
         const alreadyOn = await isDailyNotificationScheduled()
-        if (!alreadyOn && mounted) setShowNotifCard(true)
+        if (alreadyOn) {
+          await refreshDailyNotification(completed.streakDays)
+        } else if (mounted) {
+          setShowNotifCard(true)
+        }
       }
 
       // ── 7. Session insight (requires ≥ 3 rounds with rich data) ──

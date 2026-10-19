@@ -18,6 +18,7 @@ import type { PatternTag } from '@/src/content/types'
 import { useAppState } from '@/src/state/useAppState'
 import { getWeakTags } from '@/src/state/store'
 import { getLevelBand } from '@/src/ui/levelConfig'
+import { analytics } from '@/src/analytics'
 
 export default function TrainScreen() {
   const router = useRouter()
@@ -43,6 +44,7 @@ export default function TrainScreen() {
       const ids = await ensureDailyStarted()
       ;(global as any).__pendingDailyIds = ids
       await AsyncStorage.setItem('@dojo/pendingSessionIds', JSON.stringify(ids))
+      analytics.dailyStarted({ dailyNumber, sr: state.sr })
       router.push({
         pathname: '/round',
         params: { episodeId: ids[0], sessionIndex: '0', sessionTotal: String(ids.length) },

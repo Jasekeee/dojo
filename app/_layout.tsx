@@ -4,11 +4,12 @@ import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import 'react-native-reanimated'
 import { AppProviders } from '@/components/app-providers'
-import { useCallback } from 'react'
+import { useCallback, useEffect } from 'react'
 import * as SplashScreen from 'expo-splash-screen'
 import { View } from 'react-native'
 import { useTrackLocations } from '@/hooks/use-track-locations'
 import { AppSplashController } from '@/components/app-splash-controller'
+import { initAnalytics } from '@/src/analytics'
 import {
   Inter_400Regular,
   Inter_500Medium,
@@ -23,10 +24,9 @@ import {
 } from '@expo-google-fonts/playfair-display'
 
 SplashScreen.preventAutoHideAsync()
+initAnalytics()
 
 export default function RootLayout() {
-  // Use this hook to track the locations for analytics or debugging.
-  // Delete if you don't need it.
   useTrackLocations((pathname, params) => {
     console.log(`Track ${pathname}`, { params })
   })

@@ -20,6 +20,8 @@ import { applySrDelta, getLevel } from '@/src/engine/rating'
 import { computeScore } from '@/src/engine/score'
 import { simulateTrade, type SimResult } from '@/src/engine/sim'
 import { loadState, recordRoundResult, type RoundResult } from '@/src/state/store'
+import { analytics } from '@/src/analytics'
+import { refreshDailyNotification } from '@/src/notifications'
 import { type Decision, DecisionSheet } from '@/src/ui/components/DecisionSheet'
 import { PrimaryButton } from '@/src/ui/components/PrimaryButton'
 import { Text } from '@/src/ui/components/Text'
@@ -156,6 +158,13 @@ export default function RoundScreen() {
         })
       : null
 
+    analytics.roundDecided({
+      action: d.action,
+      episodeId: episode.id,
+      tags: episode.tags,
+      difficulty: episode.difficulty,
+      sessionIndex: sessionIndex ?? 0,
+    })
     setDecision(d)
     setSimResult(sim)
     setPhase('revealing')
