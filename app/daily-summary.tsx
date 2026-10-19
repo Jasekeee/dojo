@@ -9,6 +9,7 @@ import {
   DEFAULT_NOTIF_HOUR,
 } from '@/src/notifications'
 import { analytics } from '@/src/analytics'
+import { submitLeaderboardScore } from '@/src/leaderboard'
 import Animated from 'react-native-reanimated'
 import { completeDailySession, loadState, type AppState, type RoundResult } from '@/src/state/store'
 import { computeBehaviourMetrics, generateInsights } from '@/src/engine/insights'
@@ -152,7 +153,17 @@ export default function DailySummaryScreen() {
         })
       }
 
-      // ── 8. Notification prompt + refresh streak content ──
+      // ── 8. Submit leaderboard score ──
+      if (!alreadyCompleted) {
+        submitLeaderboardScore({
+          sr:           completed.sr,
+          level:        getLevel(completed.sr),
+          streakDays:   completed.streakDays,
+          totalRounds:  completed.history.length,
+        }).catch(() => {}) // fire-and-forget, never block UI
+      }
+
+      // ── 9. Notification prompt + refresh streak content ──
       if (!alreadyCompleted && mounted) {
         const alreadyOn = await isDailyNotificationScheduled()
         if (alreadyOn) {
