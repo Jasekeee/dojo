@@ -18,6 +18,7 @@ import { Card } from '@/src/ui/components/Card'
 import { PrimaryButton } from '@/src/ui/components/PrimaryButton'
 import { Screen } from '@/src/ui/components/Screen'
 import { Text } from '@/src/ui/components/Text'
+import { useShareCard } from '@/src/ui/components/ShareCard'
 import { haptics } from '@/src/ui/haptics'
 import { fadeDown, fadeUp } from '@/src/ui/motion'
 import { colors, fonts, levelColors, radius, space } from '@/src/ui/theme'
@@ -197,6 +198,9 @@ export default function DailySummaryScreen() {
   const srNow      = finalState?.sr ?? 500
   const srBefore   = srNow - srDeltaSession
   const streakDays = finalState?.streakDays ?? 0
+
+  const sessionForShare = finalState ? { wins, rounds: played, srDelta: srDeltaSession } : undefined
+  const { share, sharing, cardView } = useShareCard(srNow, streakDays, finalState?.history.length ?? 0, sessionForShare)
 
   if (!finalState && rounds.length === 0) {
     return (
@@ -435,13 +439,21 @@ export default function DailySummaryScreen() {
           </Animated.View>
         )}
 
-        {/* ── CTA ── */}
-        <Animated.View entering={fadeUp(360, 260)}>
+        {/* ── Share + CTA ── */}
+        <Animated.View entering={fadeUp(360, 260)} style={{ gap: space.sm }}>
+          <Pressable
+            onPress={share}
+            disabled={sharing}
+            style={styles.shareBtn}
+          >
+            <Text style={styles.shareBtnText}>{sharing ? 'Preparing…' : '↑ Share result'}</Text>
+          </Pressable>
           <PrimaryButton
             label="Back to training"
             onPress={() => router.replace('/(tabs)/train')}
           />
         </Animated.View>
+        {cardView}
 
         <Text variant="caption" style={styles.disclaimer}>
           Educational simulation · Not financial advice
@@ -695,6 +707,8 @@ const styles = StyleSheet.create({
   insightText: { flex: 1, color: colors.muted, fontSize: 14, lineHeight: 22 },
 
   disclaimer: { textAlign: 'center', color: colors.muted },
+  shareBtn: { borderWidth: 1, borderColor: colors.line, borderRadius: radius.pill, paddingVertical: 14, alignItems: 'center' },
+  shareBtnText: { fontFamily: fonts.uiMedium, fontSize: 15, color: colors.muted },
   notifCard: { gap: space.sm },
   notifActions: { flexDirection: 'row', alignItems: 'center', gap: space.lg },
   notifYes: { backgroundColor: `${colors.brand}18`, borderWidth: 1, borderColor: `${colors.brand}50`, borderRadius: radius.pill, paddingHorizontal: space.lg, paddingVertical: 10 },

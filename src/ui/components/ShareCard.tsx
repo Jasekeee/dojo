@@ -21,13 +21,16 @@ interface ShareCardViewProps {
   sr: number
   streakDays: number
   totalRounds: number
+  // Optional: session result for post-session card
+  session?: { wins: number; rounds: number; srDelta: number }
 }
 
-function ShareCardView({ sr, streakDays, totalRounds }: ShareCardViewProps) {
+function ShareCardView({ sr, streakDays, totalRounds, session }: ShareCardViewProps) {
   const level = getLevel(sr)
   const { band } = getLevelBand(sr)
   const levelColor = levelColors[level]
   const srDisplay = Math.round(sr)
+  const hasSession = session !== undefined
 
   return (
     <View style={card.root}>
@@ -44,25 +47,57 @@ function ShareCardView({ sr, streakDays, totalRounds }: ShareCardViewProps) {
         <Text style={card.tagline}>Trade · Train · Improve</Text>
       </View>
 
-      {/* SR hero */}
-      <View style={card.srSection}>
-        <Text style={card.srLabel}>SKILL RATING</Text>
-        <Text style={[card.srValue, { color: levelColor }]}>{srDisplay}</Text>
-        <View style={[card.levelPill, { borderColor: levelColor }]}>
-          <Text style={[card.levelText, { color: levelColor }]}>{level.toUpperCase()}</Text>
-        </View>
-      </View>
+      {hasSession ? (
+        /* ── Session result card ── */
+        <>
+          <View style={card.sessionHero}>
+            <Text style={card.sessionVs}>
+              <Text style={{ color: colors.gain, fontFamily: 'SpaceGrotesk_700Bold' }}>
+                {session.wins}
+              </Text>
+              <Text style={{ color: colors.muted }}> / {session.rounds}</Text>
+            </Text>
+            <Text style={card.sessionVsLabel}>BEAT THE BOT</Text>
+          </View>
 
-      {/* SR bar */}
-      <View style={card.barWrap}>
-        <SRBar sr={sr} compact style={{ width: '100%' }} />
-      </View>
+          <View style={card.sessionDeltaRow}>
+            {session.srDelta !== 0 && (
+              <View style={[card.deltaPill, { borderColor: session.srDelta > 0 ? `${colors.gain}40` : `${colors.loss}40` }]}>
+                <Text style={[card.deltaText, { color: session.srDelta > 0 ? colors.gain : colors.loss }]}>
+                  {session.srDelta > 0 ? '+' : ''}{session.srDelta} SR
+                </Text>
+              </View>
+            )}
+            <View style={[card.levelPill, { borderColor: levelColor }]}>
+              <Text style={[card.levelText, { color: levelColor }]}>{level.toUpperCase()} {srDisplay}</Text>
+            </View>
+          </View>
+
+          <View style={card.barWrap}>
+            <SRBar sr={sr} compact style={{ width: '100%' }} />
+          </View>
+        </>
+      ) : (
+        /* ── Profile card ── */
+        <>
+          <View style={card.srSection}>
+            <Text style={card.srLabel}>SKILL RATING</Text>
+            <Text style={[card.srValue, { color: levelColor }]}>{srDisplay}</Text>
+            <View style={[card.levelPill, { borderColor: levelColor }]}>
+              <Text style={[card.levelText, { color: levelColor }]}>{level.toUpperCase()}</Text>
+            </View>
+          </View>
+          <View style={card.barWrap}>
+            <SRBar sr={sr} compact style={{ width: '100%' }} />
+          </View>
+        </>
+      )}
 
       {/* Stats row */}
       <View style={card.statsRow}>
         <View style={card.stat}>
           <Text style={card.statVal}>{totalRounds}</Text>
-          <Text style={card.statLabel}>SESSIONS</Text>
+          <Text style={card.statLabel}>ROUNDS</Text>
         </View>
         {streakDays > 0 && (
           <View style={[card.stat, card.statDivider]}>
@@ -70,18 +105,20 @@ function ShareCardView({ sr, streakDays, totalRounds }: ShareCardViewProps) {
             <Text style={card.statLabel}>STREAK</Text>
           </View>
         )}
-        <View style={[card.stat, streakDays > 0 && card.statDivider]}>
-          <Text style={[card.statVal, { color: colors.brand }]}>
-            {band.level === 'Legend' ? '★' : `${Math.round((sr / band.max) * 100)}%`}
-          </Text>
-          <Text style={card.statLabel}>LEVEL</Text>
-        </View>
+        {!hasSession && (
+          <View style={[card.stat, card.statDivider]}>
+            <Text style={[card.statVal, { color: colors.brand }]}>
+              {band.level === 'Legend' ? '★' : `${Math.round((sr / band.max) * 100)}%`}
+            </Text>
+            <Text style={card.statLabel}>LEVEL</Text>
+          </View>
+        )}
       </View>
 
-      {/* Footer disclaimer */}
+      {/* Footer */}
       <View style={card.footer}>
         <Text style={card.disclaimer}>
-          Educational simulation · Results do not reflect real trading performance
+          Educational simulation · Not financial advice
         </Text>
         <Text style={card.dojoUrl}>dojo.app</Text>
       </View>
@@ -188,6 +225,12 @@ const card = StyleSheet.create({
     color: colors.muted,
     marginTop: 2,
   },
+  sessionHero: { alignItems: 'center', paddingVertical: space.lg },
+  sessionVs: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 80, lineHeight: 84, letterSpacing: -2, fontVariant: ['tabular-nums'] as any },
+  sessionVsLabel: { fontFamily: 'Inter_500Medium', fontSize: 11, letterSpacing: 3, color: colors.muted, marginTop: space.xs },
+  sessionDeltaRow: { flexDirection: 'row', justifyContent: 'center', gap: space.sm, marginBottom: space.md },
+  deltaPill: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 5 },
+  deltaText: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 14, letterSpacing: 0.5, fontVariant: ['tabular-nums'] as any },
   footer: {
     alignItems: 'center',
     gap: 4,
@@ -209,9 +252,19 @@ const card = StyleSheet.create({
 
 // ─── useShareCard hook ────────────────────────────────────────────────────────
 
-export function useShareCard(sr: number, streakDays: number, totalRounds: number) {
+export function useShareCard(
+  sr: number,
+  streakDays: number,
+  totalRounds: number,
+  session?: { wins: number; rounds: number; srDelta: number },
+) {
   const ref = useRef<ViewShot>(null)
   const [sharing, setSharing] = useState(false)
+  const level = getLevel(sr)
+
+  const shareText = session
+    ? `I beat the bot ${session.wins}/${session.rounds} times in today's Dojo training. ${session.srDelta > 0 ? `+${session.srDelta} SR. ` : ''}SR: ${Math.round(sr)} (${level})\nEducational simulation only.`
+    : `My Dojo Skill Rating: ${Math.round(sr)} — ${level}\n${streakDays > 1 ? `${streakDays}-day streak. ` : ''}Educational simulation only.`
 
   const share = useCallback(async () => {
     if (sharing) return
@@ -226,23 +279,17 @@ export function useShareCard(sr: number, streakDays: number, totalRounds: number
       }
 
       const available = await ExpoSharing.isAvailableAsync()
-
-      // Capture the off-screen card view
       const uri = await (ref.current as any).capture()
 
       if (available) {
         await ExpoSharing.shareAsync(uri, {
           mimeType: 'image/png',
-          dialogTitle: 'Share your Dojo rating',
+          dialogTitle: 'Share your Dojo result',
         })
       } else {
-        // Fallback: native Share sheet (text only)
-        await Share.share({
-          message: `My Dojo Skill Rating: ${Math.round(sr)} — Level ${getLevel(sr)}\nEducational simulation only.`,
-        })
+        await Share.share({ message: shareText })
       }
     } catch (err: any) {
-      // User dismissed the share sheet — not an error
       if (!err?.message?.toLowerCase().includes('cancel')) {
         Alert.alert('Share failed', 'Could not export the card. Please try again.')
         haptics.error()
@@ -250,7 +297,7 @@ export function useShareCard(sr: number, streakDays: number, totalRounds: number
     } finally {
       setSharing(false)
     }
-  }, [sharing, sr])
+  }, [sharing, shareText])
 
   const cardView = (
     <ViewShot
@@ -258,7 +305,7 @@ export function useShareCard(sr: number, streakDays: number, totalRounds: number
       options={{ format: 'png', quality: 1.0, width: CARD_W * 2, height: CARD_H * 2 }}
       style={styles.offscreen}
     >
-      <ShareCardView sr={sr} streakDays={streakDays} totalRounds={totalRounds} />
+      <ShareCardView sr={sr} streakDays={streakDays} totalRounds={totalRounds} session={session} />
     </ViewShot>
   )
 
