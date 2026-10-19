@@ -274,9 +274,9 @@ export function CandleChart({
         {referenceLines?.stop !== undefined && referenceLines?.target !== undefined && (
           <Rect
             x={0}
-            y={y(referenceLines.target)}
+            y={Math.min(y(referenceLines.stop), y(referenceLines.target))}
             width={chartW}
-            height={Math.max(0, y(referenceLines.stop) - y(referenceLines.target))}
+            height={Math.max(0, Math.abs(y(referenceLines.stop) - y(referenceLines.target)))}
             color="#FFFFFF"
             opacity={0.03}
           />

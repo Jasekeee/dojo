@@ -4,7 +4,7 @@ import { attemptedTags, type EpisodeResultRecord, weakestTags } from './metrics'
 const record = (tags: EpisodeResultRecord['tags'], score: number): EpisodeResultRecord => ({
   episodeId: Math.random().toString(),
   tags,
-  action: 'buy',
+  action: 'long',
   score,
   dateISO: '2026-10-11',
 })

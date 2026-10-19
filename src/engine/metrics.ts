@@ -6,7 +6,7 @@ import type { PatternTag } from '@/src/content/types'
 export interface EpisodeResultRecord {
   episodeId: string
   tags: PatternTag[]
-  action: 'buy' | 'skip'
+  action: 'long' | 'short' | 'skip'
   score: number
   dateISO: string
 }

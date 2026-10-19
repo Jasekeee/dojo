@@ -14,6 +14,7 @@ describe('simulateTrade', () => {
   it('exits at target when target is hit before stop, on a later candle', () => {
     const result = simulateTrade({
       entry: 100,
+      direction: 'long',
       size: 1,
       stopPct: 0.2,
       targetPct: 0.5,
@@ -27,6 +28,7 @@ describe('simulateTrade', () => {
   it('exits at stop when stop is hit before target, on a later candle', () => {
     const result = simulateTrade({
       entry: 100,
+      direction: 'long',
       size: 1,
       stopPct: 0.2,
       targetPct: 0.5,
@@ -40,6 +42,7 @@ describe('simulateTrade', () => {
   it('same-candle rule: stop wins when both stop and target are hit in the same candle', () => {
     const result = simulateTrade({
       entry: 100,
+      direction: 'long',
       size: 1,
       stopPct: 0.2,
       targetPct: 0.5,
@@ -52,6 +55,7 @@ describe('simulateTrade', () => {
   it('exits at the close of the last candle when neither stop nor target is hit', () => {
     const result = simulateTrade({
       entry: 100,
+      direction: 'long',
       size: 1,
       stopPct: 0.2,
       targetPct: 0.5,
@@ -64,6 +68,7 @@ describe('simulateTrade', () => {
   it('applies the round-trip cost to the return', () => {
     const result = simulateTrade({
       entry: 100,
+      direction: 'long',
       size: 1,
       afterCandles: [candle(110, 95, 110)],
     })
@@ -73,16 +78,54 @@ describe('simulateTrade', () => {
   })
 
   it('scales return by size', () => {
-    const full = simulateTrade({ entry: 100, size: 1, afterCandles: [candle(120, 95, 120)] })
-    const half = simulateTrade({ entry: 100, size: 0.5, afterCandles: [candle(120, 95, 120)] })
+    const full = simulateTrade({ entry: 100, direction: 'long', size: 1, afterCandles: [candle(120, 95, 120)] })
+    const half = simulateTrade({ entry: 100, direction: 'long', size: 0.5, afterCandles: [candle(120, 95, 120)] })
     expect(half.returnOnEquity).toBeCloseTo(full.returnOnEquity / 2, 10)
   })
 
   it('exits at entry with no after candles (edge case)', () => {
-    const result = simulateTrade({ entry: 100, size: 1, afterCandles: [] })
+    const result = simulateTrade({ entry: 100, direction: 'long', size: 1, afterCandles: [] })
     expect(result.exitPrice).toBe(100)
     expect(result.exitIndex).toBe(-1)
     expect(result.exitReason).toBe('end')
+  })
+
+  it('short: exits at stop when price rises past stop level', () => {
+    const result = simulateTrade({
+      entry: 100,
+      direction: 'short',
+      size: 1,
+      stopPct: 0.1,   // stop at 110
+      targetPct: 0.2, // target at 80
+      afterCandles: [candle(105, 98, 103), candle(112, 108, 110)],
+    })
+    expect(result.exitReason).toBe('stop')
+    expect(result.exitPrice).toBeCloseTo(110, 8)
+  })
+
+  it('short: exits at target when price falls past target level', () => {
+    const result = simulateTrade({
+      entry: 100,
+      direction: 'short',
+      size: 1,
+      stopPct: 0.1,   // stop at 110
+      targetPct: 0.2, // target at 80
+      afterCandles: [candle(102, 95, 99), candle(98, 78, 82)],
+    })
+    expect(result.exitReason).toBe('target')
+    expect(result.exitPrice).toBe(80)
+  })
+
+  it('short: return is positive when price falls', () => {
+    const result = simulateTrade({
+      entry: 100,
+      direction: 'short',
+      size: 1,
+      afterCandles: [candle(102, 95, 90)],
+    })
+    // exits at 90: return = 1 * (1 - 90/100 - 0.01) = 0.09
+    const expected = 1 * (1 - 90 / 100 - COST_ROUND_TRIP)
+    expect(result.returnOnEquity).toBeCloseTo(expected, 10)
   })
 
   it('skip always returns 0', () => {

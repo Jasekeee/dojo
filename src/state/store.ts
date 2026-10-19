@@ -12,7 +12,7 @@ const KEY = '@dojo/state/v1'
 export interface RoundResult {
   episodeId: string
   tags: PatternTag[]
-  action: 'buy' | 'skip'
+  action: 'long' | 'short' | 'skip'
   userReturn: number
   botReturn: number
   score: number

@@ -16,9 +16,10 @@ const BOT_TARGET_PCT = 0.5
 
 function computeBaselines(window: LabeledWindow): Baselines {
   const entry = window.before[window.before.length - 1][4] // close of last visible candle
-  const hold = simulateTrade({ entry, size: 1, afterCandles: window.after })
+  const hold = simulateTrade({ entry, direction: 'long', size: 1, afterCandles: window.after })
   const bot = simulateTrade({
     entry,
+    direction: 'long',
     size: BOT_SIZE,
     stopPct: BOT_STOP_PCT,
     targetPct: BOT_TARGET_PCT,

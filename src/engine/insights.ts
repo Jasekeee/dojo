@@ -24,7 +24,7 @@ export function generateInsights(metrics: BehaviourMetrics, lastResult: RoundRes
   if (metrics.fomoPct > 50) {
     const fomoTags = new Set(['pump_dump', 'fakeout', 'breakout'])
     const fomoBuys = metrics.lastResults.filter(
-      (r) => r.action === 'buy' && r.tags.some((t) => fomoTags.has(t))
+      (r) => r.action !== 'skip' && r.tags.some((t) => fomoTags.has(t))
     )
     const fomoAvgReturn = fomoBuys.length > 0
       ? Math.round((fomoBuys.reduce((s, r) => s + r.userReturn, 0) / fomoBuys.length) * 100)
@@ -78,10 +78,10 @@ export function computeBehaviourMetrics(results: RoundResult[]): BehaviourMetric
     return { fomoPct: 0, disciplinePct: 100, selectivityPct: 50, lastResults: [] }
   }
 
-  const buys = results.filter((r) => r.action === 'buy')
+  const buys = results.filter((r) => r.action !== 'skip')
   const skips = results.filter((r) => r.action === 'skip')
 
-  // FOMO: buys tagged with pump_dump or fakeout (simplified proxy for "after a run")
+  // FOMO: trades tagged with pump_dump or fakeout (simplified proxy for "after a run")
   const fomoTags = new Set(['pump_dump', 'fakeout', 'breakout'])
   const fomoBuys = buys.filter((r) => r.tags.some((t) => fomoTags.has(t))).length
   const fomoPct = buys.length > 0 ? (fomoBuys / buys.length) * 100 : 0
