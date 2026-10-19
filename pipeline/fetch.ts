@@ -22,7 +22,7 @@ const MAJOR_TIMEFRAMES: { interval: string; label: '1h' | '4h' }[] = [
   { interval: '4h', label: '4h' },
 ]
 
-const MEME_TOKEN_COUNT = 50
+const MEME_TOKEN_COUNT = 100
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))

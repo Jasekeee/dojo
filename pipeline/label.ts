@@ -9,8 +9,8 @@ import type { Candle, LabeledWindow, PatternTag, SlicedWindow } from './types'
 
 const RAW_DIR = join(__dirname, '..', 'data', 'raw')
 
-const BREAKOUT_LOOKBACK = 20
-const BREAKOUT_VOL_MULT = 1.5
+const BREAKOUT_LOOKBACK = 15
+const BREAKOUT_VOL_MULT = 1.3
 const RANGE_MAX_SPAN_PCT = 0.12
 const PUMP_DUMP_PUMP_PCT = 0.2
 const PUMP_DUMP_DUMP_PCT = 0.12
@@ -18,8 +18,8 @@ const SLOW_BLEED_MIN_RET = -0.05
 const TREND_PULLBACK_MIN_UP = 0.1
 const TREND_PULLBACK_MIN_PULLBACK = -0.03
 const TREND_PULLBACK_MAX_PULLBACK = -0.2
-const CAPITULATION_RED_BODY_PCT = 0.05
-const CAPITULATION_VOL_MULT = 1.8
+const CAPITULATION_RED_BODY_PCT = 0.03
+const CAPITULATION_VOL_MULT = 1.4
 
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length
 
@@ -30,7 +30,7 @@ function detectBreakout(c: Candle[]): boolean {
   const prior = window.slice(0, -1)
   const priorHigh = Math.max(...prior.map((x) => x[2]))
   const avgVol = mean(prior.map((x) => x[5]))
-  return last[4] >= priorHigh && last[5] > avgVol * BREAKOUT_VOL_MULT
+  return last[2] >= priorHigh && last[5] > avgVol * BREAKOUT_VOL_MULT
 }
 
 const FAKEOUT_BREAKOUT_MARGIN = 0.015 // close must clear the prior range high by 1.5% to count as a real breakout
@@ -115,9 +115,10 @@ function labelWindow(c: Candle[]): PatternTag[] {
 }
 
 function assignDifficulty(tags: PatternTag[]): 1 | 2 | 3 {
-  if (tags.includes('fakeout') || tags.length === 0) return 3
-  if (tags.includes('range') || tags.includes('slow_bleed')) return 2
-  return 1
+  if (tags.includes('fakeout') || tags.includes('capitulation') || tags.length === 0) return 3
+  if (tags.includes('range')) return 1
+  if (tags.includes('slow_bleed') || tags.includes('trend_pullback') || tags.includes('breakout') || tags.includes('pump_dump')) return 2
+  return 2
 }
 
 function main() {

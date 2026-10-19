@@ -254,7 +254,10 @@ export default function RoundScreen() {
       {/* ── Top bar ── */}
       <View style={[styles.topBar, { paddingTop: insets.top + 6 }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => {
+            if (router.canGoBack()) router.back()
+            else router.replace('/(tabs)/train')
+          }}
           hitSlop={16}
           accessibilityRole="button"
           accessibilityLabel="Close"

@@ -1,6 +1,12 @@
 import { useRouter } from 'expo-router'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { ScrollView, StyleSheet, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import {
+  requestNotificationPermission,
+  scheduleDailyNotification,
+  isDailyNotificationScheduled,
+  DEFAULT_NOTIF_HOUR,
+} from '@/src/notifications'
 import Animated from 'react-native-reanimated'
 import { completeDailySession, loadState, type AppState, type RoundResult } from '@/src/state/store'
 import { computeBehaviourMetrics, generateInsights } from '@/src/engine/insights'
@@ -12,7 +18,7 @@ import { Screen } from '@/src/ui/components/Screen'
 import { Text } from '@/src/ui/components/Text'
 import { haptics } from '@/src/ui/haptics'
 import { fadeDown, fadeUp } from '@/src/ui/motion'
-import { colors, levelColors, radius, space } from '@/src/ui/theme'
+import { colors, fonts, levelColors, radius, space } from '@/src/ui/theme'
 import { LEVEL_BANDS, getLevelBand, getLevelColor } from '@/src/ui/levelConfig'
 import { SRBar } from '@/src/ui/components/SRBar'
 import type { PatternTag } from '@/src/content/types'
@@ -50,7 +56,9 @@ export default function DailySummaryScreen() {
   const [srDeltaSession, setSrDeltaSession] = useState(0)
   const [insight,     setInsight]     = useState<string | null>(null)
   const [dailyNumber, setDailyNumber] = useState(1)
-  const [isReopen,    setIsReopen]    = useState(false)
+  const [isReopen,      setIsReopen]      = useState(false)
+  const [showNotifCard, setShowNotifCard] = useState(false)
+  const [notifDismissed, setNotifDismissed] = useState(false)
 
   // Guard: fire haptic only once
   const hapticFired = useRef(false)
@@ -123,6 +131,12 @@ export default function DailySummaryScreen() {
       if (!alreadyCompleted && !hapticFired.current) {
         hapticFired.current = true
         haptics.streakMilestone()
+      }
+
+      // ── 7. Notification prompt — show only if not already scheduled ──
+      if (!alreadyCompleted) {
+        const alreadyOn = await isDailyNotificationScheduled()
+        if (!alreadyOn && mounted) setShowNotifCard(true)
       }
 
       // ── 7. Session insight (requires ≥ 3 rounds with rich data) ──
@@ -362,6 +376,38 @@ export default function DailySummaryScreen() {
               <View style={styles.insightRow}>
                 <View style={styles.insightDot} />
                 <Text variant="body" style={styles.insightText}>{insight}</Text>
+              </View>
+            </Card>
+          </Animated.View>
+        )}
+
+        {/* ── Notification prompt (shown once, after first session) ── */}
+        {showNotifCard && !notifDismissed && (
+          <Animated.View entering={fadeUp(320, 200)}>
+            <Card style={styles.notifCard}>
+              <Text variant="label" style={{ letterSpacing: 1, color: colors.brand, marginBottom: space.sm }}>
+                DAILY REMINDER
+              </Text>
+              <Text variant="body" style={{ fontSize: 14, lineHeight: 20, marginBottom: space.md }}>
+                Get reminded at 8 PM every day so you never break your streak.
+              </Text>
+              <View style={styles.notifActions}>
+                <Pressable
+                  onPress={async () => {
+                    const granted = await requestNotificationPermission()
+                    if (granted) await scheduleDailyNotification(DEFAULT_NOTIF_HOUR, streakDays)
+                    setNotifDismissed(true)
+                  }}
+                  style={styles.notifYes}
+                >
+                  <Text style={styles.notifYesLabel}>Yes, remind me</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setNotifDismissed(true)}
+                  hitSlop={12}
+                >
+                  <Text variant="caption" style={{ color: colors.muted }}>Not now</Text>
+                </Pressable>
               </View>
             </Card>
           </Animated.View>
@@ -627,6 +673,10 @@ const styles = StyleSheet.create({
   insightText: { flex: 1, color: colors.muted, fontSize: 14, lineHeight: 22 },
 
   disclaimer: { textAlign: 'center', color: colors.muted },
+  notifCard: { gap: space.sm },
+  notifActions: { flexDirection: 'row', alignItems: 'center', gap: space.lg },
+  notifYes: { backgroundColor: `${colors.brand}18`, borderWidth: 1, borderColor: `${colors.brand}50`, borderRadius: radius.pill, paddingHorizontal: space.lg, paddingVertical: 10 },
+  notifYesLabel: { fontFamily: fonts.uiMedium, fontSize: 14, color: colors.brand },
 })
 
 const rr = StyleSheet.create({

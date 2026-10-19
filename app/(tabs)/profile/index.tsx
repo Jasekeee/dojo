@@ -1,5 +1,15 @@
 import { useRouter } from 'expo-router'
-import React, { useCallback, useMemo } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { Switch } from 'react-native'
+import * as Notifications from 'expo-notifications'
+import {
+  requestNotificationPermission,
+  scheduleDailyNotification,
+  cancelDailyNotification,
+  isDailyNotificationScheduled,
+  NOTIF_TIME_PRESETS,
+  DEFAULT_NOTIF_HOUR,
+} from '@/src/notifications'
 import { flags } from '@/src/features/flags'
 import { highestEligibleLevel } from '@/src/chain/sbt'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
@@ -249,6 +259,36 @@ export default function ProfileScreen() {
   )
 
   const weakest = useMemo(() => weakestTags(state.history, 3), [state.history])
+
+  const [notifEnabled, setNotifEnabled] = useState(false)
+  const [notifHour, setNotifHour] = useState(DEFAULT_NOTIF_HOUR)
+
+  useEffect(() => {
+    isDailyNotificationScheduled().then(setNotifEnabled)
+    Notifications.getAllScheduledNotificationsAsync().then((all) => {
+      const existing = all.find((n) => n.identifier === 'dojo-daily-training')
+      const trigger = existing?.trigger as any
+      if (trigger?.hour !== undefined) setNotifHour(trigger.hour)
+    })
+  }, [])
+
+  const toggleNotifications = async (value: boolean) => {
+    if (value) {
+      const granted = await requestNotificationPermission()
+      if (!granted) return
+      await scheduleDailyNotification(notifHour, state.streakDays)
+    } else {
+      await cancelDailyNotification()
+    }
+    setNotifEnabled(value)
+  }
+
+  const changeNotifHour = async (hour: number) => {
+    setNotifHour(hour)
+    if (notifEnabled) {
+      await scheduleDailyNotification(hour, state.streakDays)
+    }
+  }
 
   const { share, sharing, cardView } = useShareCard(
     state.sr,
@@ -578,6 +618,48 @@ export default function ProfileScreen() {
           </Animated.View>
         )}
 
+        {/* Settings */}
+        <Card>
+          <Text variant="label" style={[styles.sectionLabel, { marginBottom: space.md }]}>SETTINGS</Text>
+          <View style={styles.settingRow}>
+            <View style={{ flex: 1 }}>
+              <Text variant="body" style={{ fontSize: 14 }}>Daily reminder</Text>
+              <Text variant="caption" style={{ color: colors.muted, marginTop: 2 }}>
+                {notifEnabled
+                  ? `${NOTIF_TIME_PRESETS.find(p => p.hour === notifHour)?.label ?? `${notifHour}:00`} every day`
+                  : 'Off'}
+              </Text>
+            </View>
+            <Switch
+              value={notifEnabled}
+              onValueChange={toggleNotifications}
+              trackColor={{ false: colors.bg3, true: `${colors.brand}80` }}
+              thumbColor={notifEnabled ? colors.brand : colors.muted}
+            />
+          </View>
+          {notifEnabled && (
+            <View style={styles.timePresets}>
+              {NOTIF_TIME_PRESETS.map((p) => (
+                <Pressable
+                  key={p.hour}
+                  onPress={() => changeNotifHour(p.hour)}
+                  style={[
+                    styles.timeChip,
+                    notifHour === p.hour && styles.timeChipActive,
+                  ]}
+                >
+                  <Text style={[
+                    styles.timeChipLabel,
+                    notifHour === p.hour && { color: colors.brand },
+                  ]}>
+                    {p.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+        </Card>
+
         <Text variant="caption" style={styles.disclaimer}>
           Educational simulation · Not financial advice{'\n'}
           Past performance does not predict future results
@@ -717,6 +799,11 @@ const styles = StyleSheet.create({
   // Global
   sectionLabel: { letterSpacing: 1, marginBottom: space.sm },
   disclaimer: { textAlign: 'center', lineHeight: 18 },
+  settingRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  timePresets: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.md, paddingTop: space.md, borderTopWidth: 1, borderTopColor: colors.line },
+  timeChip: { paddingHorizontal: space.md, paddingVertical: 6, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.bg2 },
+  timeChipActive: { borderColor: `${colors.brand}60`, backgroundColor: `${colors.brand}12` },
+  timeChipLabel: { fontFamily: fonts.uiMedium, fontSize: 12, color: colors.muted },
 })
 
 const mr = StyleSheet.create({
