@@ -45,3 +45,4 @@ app-example
 # https://docs.expo.dev/workflow/continuous-native-generation/
 /android
 /ios
+android/app/dojo-release.keystore
