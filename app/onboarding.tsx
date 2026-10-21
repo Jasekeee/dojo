@@ -36,6 +36,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/src/ui/components/PrimaryButton'
 import { Text } from '@/src/ui/components/Text'
 import { haptics } from '@/src/ui/haptics'
+import { analytics } from '@/src/analytics'
 import { isReduceMotionEnabled } from '@/src/ui/motion'
 import { colors, radius, space } from '@/src/ui/theme'
 import { episodes } from '@/src/content/episodes'
@@ -509,6 +510,7 @@ export default function OnboardingScreen() {
     haptics.confirm()
     try {
       await markOnboardingDone()
+      analytics.onboardingComplete()
       const ep = episodes[Math.floor(Math.random() * Math.min(20, episodes.length))]
       router.replace({ pathname: '/round', params: { episodeId: ep.id } })
     } catch {
