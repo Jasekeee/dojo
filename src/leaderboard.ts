@@ -77,14 +77,23 @@ export async function submitLeaderboardScore(params: {
 export async function fetchLeaderboard(limit = 50): Promise<LeaderboardEntry[]> {
   if (!supabase) return MOCK_DATA
 
-  const { data, error } = await supabase
-    .from('leaderboard')
-    .select('*')
-    .order('sr', { ascending: false })
-    .limit(limit)
+  try {
+    const fetchPromise = supabase
+      .from('leaderboard')
+      .select('*')
+      .order('sr', { ascending: false })
+      .limit(limit)
 
-  if (error || !data) return []
-  return data.map((row, i) => ({ ...row, rank: i + 1 }))
+    const timeoutPromise = new Promise<{ data: null; error: Error }>((res) =>
+      setTimeout(() => res({ data: null, error: new Error('timeout') }), 5000),
+    )
+
+    const { data, error } = await Promise.race([fetchPromise, timeoutPromise])
+    if (error || !data || data.length === 0) return MOCK_DATA
+    return data.map((row: any, i: number) => ({ ...row, rank: i + 1 }))
+  } catch {
+    return MOCK_DATA
+  }
 }
 
 export async function fetchMyRank(id: string): Promise<number | null> {
