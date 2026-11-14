@@ -105,10 +105,13 @@ android {
             keyPassword 'android'
         }
         release {
+            // Passwords live outside the repo, in ~/.gradle/gradle.properties:
+            //   DOJO_RELEASE_STORE_PASSWORD=...
+            //   DOJO_RELEASE_KEY_PASSWORD=...
             storeFile file('dojo-release.keystore')
-            storePassword 'dojo2026release'
+            storePassword findProperty('DOJO_RELEASE_STORE_PASSWORD') ?: ''
             keyAlias 'dojo'
-            keyPassword 'dojo2026release'
+            keyPassword findProperty('DOJO_RELEASE_KEY_PASSWORD') ?: ''
         }
     }
     buildTypes {
