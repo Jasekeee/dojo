@@ -6,7 +6,7 @@ import { UiIconSymbol } from '@/components/ui/ui-icon-symbol'
 import { colors, fonts, space } from '@/src/ui/theme'
 import { haptics } from '@/src/ui/haptics'
 
-type IconName = 'bolt.fill' | 'chart.bar.fill' | 'clock.fill' | 'person.fill' | 'gearshape.fill' | 'ladybug.fill'
+type IconName = 'bolt.fill' | 'chart.bar.fill' | 'clock.fill' | 'person.fill'
 
 const HIDDEN = { tabBarItemStyle: { display: 'none' as const } }
 
@@ -74,11 +74,6 @@ export default function TabLayout() {
           tabBarIcon: ({ focused }) => <TabIcon name="person.fill" focused={focused} />,
         }}
       />
-
-      <Tabs.Screen name="account"  options={HIDDEN} />
-      <Tabs.Screen name="settings" options={HIDDEN} />
-      <Tabs.Screen name="demo"     options={HIDDEN} />
-      <Tabs.Screen name="episodes" options={HIDDEN} />
     </Tabs>
   )
 }
